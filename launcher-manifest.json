@@ -2,7 +2,7 @@
   "schema_version": 2,
   "mod_info": {
     "name": "Wreckfest2HeadTracking",
-    "version": "0.0.0",
+    "version": "0.1.0",
     "game_id": "wreckfest-2"
   },
   "strategy": "AsiLoader",

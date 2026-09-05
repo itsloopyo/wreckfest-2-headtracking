@@ -22,7 +22,7 @@ set "GAME_ID=wreckfest-2"
 set "MOD_DISPLAY_NAME=Wreckfest 2 Head Tracking"
 set "MOD_DLLS=Wreckfest2HeadTracking.asi"
 set "MOD_INTERNAL_NAME=Wreckfest2HeadTracking"
-set "MOD_VERSION=0.0.0"
+set "MOD_VERSION=0.1.0"
 set "STATE_FILE=.headtracking-state.json"
 set "FRAMEWORK_TYPE=ASILoader"
 :: Filename the ASI loader DLL is renamed to: the import the game exe already
