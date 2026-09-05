@@ -1,0 +1,79 @@
+[workspace]
+name = "wreckfest-2-headtracking"
+version = "0.0.0"
+description = "Head tracking mod for Wreckfest 2 (Bugbear's in-house engine)"
+license = "MIT"
+license-file = "LICENSE"
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+[tasks]
+sync = "git submodule update --remote cameraunlock-core"
+
+# Guarded on the CACHE file rather than on the directory: a configure that fails
+# part-way still leaves build/ behind, and a directory test would then skip
+# setup forever and fail inside `cmake --build` with an unrelated message. The
+# classic way in is a clone without --recursive, where add_subdirectory of the
+# core submodule errors out.
+#
+# No -G: let CMake auto-detect the installed Visual Studio generator. Pinning
+# "Visual Studio 17 2022" broke on CI once the windows runner image moved to
+# VS 2026 (VS 17 absent); auto-detect picks whatever VS the machine has.
+setup = { cmd = """
+    powershell -Command "if (-not (Test-Path 'build/CMakeCache.txt')) { cmake -B build -A x64 } else { Write-Host 'Build directory is already configured, skipping setup' -ForegroundColor Yellow }"
+""" }
+
+build = { cmd = "cmake --build build --config Release", depends-on = ["setup"] }
+build-debug = { cmd = "cmake --build build --config Debug", depends-on = ["setup"] }
+
+clean = { cmd = """
+    powershell -Command "if (Test-Path 'build') { Remove-Item 'build' -Recurse -Force }; Write-Host 'Build artifacts cleaned' -ForegroundColor Green"
+""" }
+
+clean-all = { cmd = """
+    powershell -Command "foreach ($d in @('build','build-tests','release')) { if (Test-Path $d) { Remove-Item $d -Recurse -Force } }; Write-Host 'All build artifacts cleaned' -ForegroundColor Green"
+""" }
+
+# Unit tests: the HeadTracking.ini boundary, the shipped defaults, the camera
+# transform composition and the gameplay gate. Builds in build-tests/ so the
+# packaged build/ tree never contains a test binary.
+test = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/run-tests.ps1" }
+
+# Bump vendored Ultimate ASI Loader copy. Manual; commit the result.
+update-deps = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/update-deps.ps1" }
+
+package = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1", depends-on = ["build"] }
+
+# Release gates, run against what `package` just produced. Kept out of
+# `package`'s depends-on so a packaging run stays a packaging run; CI and the
+# release workflow call them explicitly.
+validate-manifest = "node cameraunlock-core/scripts/validate-manifest.mjs"
+validate-notices = "node cameraunlock-core/scripts/validate-notices.mjs"
+
+# The fleet-wide repo shape check. Not wired into CI: it currently fails on the
+# README's opening sentence, which is the fixed template AGENTS.md mandates
+# word for word, so the rule and the template contradict each other and the
+# conflict lives in cameraunlock-core rather than here. Declared so it is at
+# least runnable, and so the next session finds it rather than rediscovering it.
+conformance = "powershell -ExecutionPolicy Bypass -File cameraunlock-core/scripts/conformance.ps1"
+
+# Dev loop: build, then copy the .asi + vendored loader straight into the
+# detected game folder. install.cmd is the end-user path and is not run here -
+# it pauses when it isn't given /y, and pixi allocates no stdin to read from.
+install = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1", depends-on = ["build"] }
+
+uninstall = "scripts/uninstall.cmd /y"
+
+release = "powershell -ExecutionPolicy Bypass -File scripts/release.ps1"
+
+# Unversioned build off the current tree, published to the dev channel. Passes
+# -NoNexusZip: this mod is installer-only, see package-release.ps1's header.
+release-nightly = "powershell -ExecutionPolicy Bypass -File scripts/release-nightly.ps1"
+
+# Compare the installed Wreckfest2.exe PE fingerprint against every build
+# profile in src/builds/. First thing to run when a user reports the dormant
+# "unknown build" log line.
+check-fingerprint = "powershell -ExecutionPolicy Bypass -File scripts/check-fingerprint.ps1"
+
+[dependencies]
+# No pixi-managed deps - relies on system CMake + Visual Studio.

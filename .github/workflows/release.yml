@@ -1,0 +1,24 @@
+name: Release
+run-name: "Release ${{ github.ref_name }}"
+
+# Everything this release does lives in cameraunlock-core's release-mod.yml.
+# Only the values below are this mod's. Pinned to a commit SHA, never a branch:
+# that workflow runs with contents:write, the Discord webhook and the Lopari PAT.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    uses: itsloopyo/cameraunlock-core/.github/workflows/release-mod.yml@435915a8a3d8e1b799cc169b74f1fcf72b9534e7
+    with:
+      project-name: 'Wreckfest 2 Head Tracking'
+      version-source: pixi
+      version-path: 'pixi.toml'
+      artifact-paths: 'src/ cameraunlock-core/ scripts/install.cmd scripts/uninstall.cmd'
+      setup-msbuild: true
+    permissions:
+      contents: write
+    secrets: inherit

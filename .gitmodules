@@ -1,0 +1,3 @@
+[submodule "cameraunlock-core"]
+	path = cameraunlock-core
+	url = https://github.com/itsloopyo/cameraunlock-core.git

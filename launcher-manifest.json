@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "mod_info": {
+    "name": "Wreckfest2HeadTracking",
+    "version": "0.0.0",
+    "game_id": "wreckfest-2"
+  },
+  "strategy": "AsiLoader",
+  "delivery_mode": "manifest",
+
+  "files": [
+    { "source": "vendor/ultimate-asi-loader/dinput8.dll", "target": "version.dll", "backup": true },
+    { "source": "plugins/Wreckfest2HeadTracking.asi", "target": "Wreckfest2HeadTracking.asi" }
+  ],
+
+  "runtime_requirements": [],
+  "dependencies": []
+}

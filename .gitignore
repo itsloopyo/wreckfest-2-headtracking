@@ -1,0 +1,45 @@
+# Build output
+bin/
+obj/
+build/
+build-tests/
+dist/
+release/
+libs/
+
+# Editors / IDEs
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Tooling
+.pixi/
+
+# Agent tooling, scratch and store copy - kept on disk, never tracked
+.claude/
+.lab/
+.skills/
+skills/
+.mcp.json
+AGENTS.md
+CLAUDE.md
+NEXUS_MODS.md
+
+# Session scratch: RE output, screenshots, traces, dumps, decompiler exports,
+# benchmark runs, agent working directories
+.scratch/
+scratch/
+.ghidra/
+ghidra_projects/
+*.gpr
+*.rep
+decompiled/
+screenshots/
+traces/
+*.dmp
+
+# Installer state and runtime output, if the mod is ever deployed into the tree
+.headtracking-state.json
+*.log
