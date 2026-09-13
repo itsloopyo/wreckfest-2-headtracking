@@ -7,7 +7,7 @@ An unofficial head tracking mod for Wreckfest 2 that moves the camera with your 
 ## Features
 
 - **6DOF tracking** - rotation and lean, so you can look into a corner and shift your head to see past the A-pillar.
-- **Works with any OpenTrack-compatible source** - webcam, phone app, or anything else that sends the OpenTrack UDP protocol
+- **Works with any OpenTrack compatible tracker** - free options available for PC, iOS and Android
 
 ## Requirements
 
@@ -16,6 +16,13 @@ An unofficial head tracking mod for Wreckfest 2 that moves the camera with your 
 - Windows 10 or 11, 64-bit.
 
 ## Installation
+
+### Lopari
+
+Download [Lopari](https://lopari.app), choose **Wreckfest 2**, and click
+**Play with head tracking**.
+
+### Standalone Installer
 
 1. Download the installer ZIP from the [Releases](https://github.com/itsloopyo/wreckfest-2-headtracking/releases) page.
 2. Extract it anywhere.
