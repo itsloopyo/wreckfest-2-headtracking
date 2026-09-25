@@ -68,6 +68,10 @@ set "ASI_SUBDIR="
 :: UE4SS: path under GAME_PATH holding the shipping exe. MUST match
 :: install.cmd's value.
 set "UE4_BINARIES_RELDIR="
+:: Not used by this mod. Set blank so a value another mod's wrapper left in
+:: the same console does not reach the body.
+set "SHIM_MARKER="
+set "SHIM_MARKER_ALT="
 :: --- END CONFIG BLOCK ---
 
 :: Pin delayed expansion off before `%*` is expanded on the `call` below.
