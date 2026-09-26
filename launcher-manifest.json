@@ -8,6 +8,14 @@
   "strategy": "AsiLoader",
   "delivery_mode": "manifest",
 
+  "config": {
+    "path": "CameraUnlock.ini",
+    "anchor": "game_root",
+    "legacy_source": "HeadTracking.ini",
+    "canonical_since": "0.2.0",
+    "per_game": {}
+  },
+
   "files": [
     { "source": "vendor/ultimate-asi-loader/dinput8.dll", "target": "version.dll", "backup": true },
     { "source": "plugins/Wreckfest2HeadTracking.asi", "target": "Wreckfest2HeadTracking.asi" }

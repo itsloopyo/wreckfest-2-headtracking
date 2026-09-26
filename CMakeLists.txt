@@ -46,8 +46,6 @@ set(MOD_SOURCES
     src/camera_transform.cpp
     src/game_state.cpp
     src/game_window.cpp
-    src/hotkey_names.cpp
-    src/hotkeys.cpp
     src/render_diagnostics.cpp
     src/builds/build_registry.cpp
     src/builds/steam_offsets.cpp
@@ -119,7 +117,7 @@ if(WF2_BUILD_TESTS)
     # Pure camera math, compiled straight from the production translation unit.
     wf2_add_test(camera_transform src/camera_transform.cpp)
 
-    # Where the log and the INI land. The mod calls cameraunlock::os for this
+    # Where the log and the config land. The mod calls cameraunlock::os for this
     # rather than carrying its own copy, so this locks the contract the
     # bootstrap depends on. The running test EXE stands in for the game.
     wf2_add_test(exe_paths)
@@ -147,17 +145,6 @@ if(WF2_BUILD_TESTS)
     wf2_add_test(game_window src/game_window.cpp)
     target_link_libraries(wf2_game_window_tests PRIVATE cameraunlock)
 
-    # The one log line that reports which keys the config landed on. What a key
-    # is called is the keyboard layout's business; that a name is always
-    # produced is this mod's.
-    wf2_add_test(hotkey_names src/hotkey_names.cpp)
-
-    # The sentence that line is built from: which action ended up on which pair
-    # of keys. Registering the bindings needs the poller thread; describing them
-    # is pure.
-    wf2_add_test(hotkeys src/hotkeys.cpp src/hotkey_names.cpp)
-    target_link_libraries(wf2_hotkeys_tests PRIVATE cameraunlock)
-
     # What the render path is allowed to write to the log. Every line there runs
     # once per camera update, so the edge-triggering and the caps are what keep
     # the log readable. Drives each latch through one designed sequence and reads
@@ -167,11 +154,12 @@ if(WF2_BUILD_TESTS)
                 src/builds/build_registry.cpp src/builds/steam_offsets.cpp)
     target_link_libraries(wf2_render_diagnostics_tests PRIVATE cameraunlock)
 
-    # Exercises the real INI generator and the frozen loader, so it needs the
-    # core's IniReader and the log sink both write their diagnostics to.
-    wf2_add_test(config_defaults src/config.cpp src/legacy_config/legacy_config.cpp)
-    target_link_libraries(wf2_config_defaults_tests PRIVATE cameraunlock)
-    target_compile_definitions(wf2_config_defaults_tests PRIVATE
+    # The committed config against the table's fresh render, the fleet's
+    # default hotkeys, and the mode cycle's save. `wf2_config_tests
+    # --render-config <path>` is pixi run render-config.
+    wf2_add_test(config src/config.cpp src/legacy_config/legacy_config.cpp)
+    target_link_libraries(wf2_config_tests PRIVATE cameraunlock)
+    target_compile_definitions(wf2_config_tests PRIVATE
         WF2_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
     # The hotkey half of the frozen loader: which INI values reach a binding and
@@ -188,11 +176,13 @@ if(WF2_BUILD_TESTS)
     # The canonical config conversion's differential test: v0.1.0's reader and
     # startup code (the oracle, compiled from byte copies in
     # tests/config_differential/oracle) against the frozen reader in
-    # src/legacy_config/.
+    # src/legacy_config/, and that against the config owner's migration into
+    # CameraUnlock.ini.
     set(WF2_DIFFERENTIAL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tests/config_differential)
     add_executable(wf2_config_differential
         ${WF2_DIFFERENTIAL_DIR}/differential_tests.cpp
         ${WF2_DIFFERENTIAL_DIR}/oracle/oracle_reader.cpp
+        src/config.cpp
         src/legacy_config/legacy_config.cpp
     )
     target_include_directories(wf2_config_differential PRIVATE
@@ -210,6 +200,12 @@ if(WF2_BUILD_TESTS)
     endif()
     add_test(NAME config_differential COMMAND wf2_config_differential)
     set_property(GLOBAL APPEND PROPERTY WF2_TEST_TARGETS wf2_config_differential)
+    # Core's canonical config lint over the committed file and every file the
+    # differential test migrated, which it writes beside itself under migrated/.
+    add_test(NAME config_lint COMMAND node
+             ${WF2_DIFFERENTIAL_DIR}/lint-migrated.mjs
+             $<TARGET_FILE_DIR:wf2_config_differential>/migrated)
+    set_tests_properties(config_lint PROPERTIES DEPENDS config_differential)
 
     # What the differential test compiles is pinned by hash, line endings aside:
     # the oracle's byte copies must stay v0.1.0's (git show v0.1.0:src/<file>),

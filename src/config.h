@@ -4,72 +4,87 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <string>
 
+#include "cameraunlock/config/config_concepts.g.h"
+#include "cameraunlock/config/config_owner.h"
+#include "cameraunlock/config/config_table.h"
+#include "cameraunlock/config/defaults_file.h"
+#include "cameraunlock/config/legacy_import.h"
 #include "cameraunlock/data/position_settings.h"
 #include "cameraunlock/math/smoothing_utils.h"
+#include "cameraunlock/tracking/tracking_mode.h"
 
 namespace wf2_ht {
 
-// The shipped default for each smoothing key. Named once here because two
-// places need it and they must not drift: the Config members below, and the
-// loader, where a value it refuses has to land on the default of the key it
-// came from rather than on one shared by both.
-inline constexpr float kDefaultLocalSmoothing =
-    static_cast<float>(cameraunlock::math::kDefaultLocalSmoothing);
-inline constexpr float kDefaultRemoteSmoothing =
-    static_cast<float>(cameraunlock::math::kDefaultRemoteSmoothing);
-
-// Default hotkey bindings, as Windows virtual key codes. Written as codes
-// rather than the VK_ macros because this header is included by translation
-// units that do not pull in windows.h, and the INI publishes them as codes too.
-inline constexpr int kDefaultToggleKey = 0x23;           // End
-inline constexpr int kDefaultCycleModeKey = 0x21;        // Page Up
-inline constexpr int kDefaultChordToggleKey = 0x59;      // Y, as Ctrl+Shift+Y
-inline constexpr int kDefaultChordCycleModeKey = 0x47;   // G, as Ctrl+Shift+G
-
+// The settings CameraUnlock.ini holds, at their defaults.
 struct Config {
-    // Held as the socket's own type so an out-of-range INI value cannot reach
-    // UdpReceiver::Start by silently truncating to a wrong 16-bit port.
+    // Held as the socket's own type so no value outside the port range reaches
+    // UdpReceiver::Start.
     std::uint16_t udp_port = 4242;
     bool enable_on_startup = true;
 
-    // Virtual key codes. Every action has a nav-cluster key and a
-    // Ctrl+Shift+<key> chord, and both fire it - the chord is there for
-    // keyboards with no nav cluster.
-    int toggle_key = kDefaultToggleKey;
-    int cycle_mode_key = kDefaultCycleModeKey;
-    int chord_toggle_key = kDefaultChordToggleKey;
-    int chord_cycle_mode_key = kDefaultChordCycleModeKey;
-
-    // No sensitivity, deadzone, response curve or axis inversion lives here,
-    // for rotation or for position: the tracker owns pose shaping, so the pose
-    // is consumed at 1:1 and one tracker profile behaves the same way in every
-    // game. The protocol-to-engine sign conversion the camera does need is a
-    // fixed part of the boundary in camera_transform.cpp, not a setting.
-
-    // Smoothing is chosen per connection from the packet's source address, and
-    // both values cover rotation and position alike. A tracker running on this
-    // machine is already steady, so local_smoothing is 0.0 and nothing floors
-    // it; a phone on WiFi jitters over the network, which is what
-    // remote_smoothing is for.
-    float local_smoothing = kDefaultLocalSmoothing;
-    float remote_smoothing = kDefaultRemoteSmoothing;
-
+    // The tracking mode at startup, the pair the mode hotkey saves.
+    bool rotation_enabled = true;
     bool position_enabled = true;
-    float limit_x = cameraunlock::PositionSettings{}.limit_x;
-    float limit_y = cameraunlock::PositionSettings{}.limit_y;
-    float limit_z = cameraunlock::PositionSettings{}.limit_z;
-    float limit_z_back = cameraunlock::PositionSettings{}.limit_z_back;
+
+    // Smoothing for a tracker on this machine and for one on another device.
+    // Rotation and position both use the pair.
+    float local_smoothing = static_cast<float>(cameraunlock::math::kDefaultLocalSmoothing);
+    float remote_smoothing = static_cast<float>(cameraunlock::math::kDefaultRemoteSmoothing);
+
+    // Travel limits in metres.
+    float position_limit_x = cameraunlock::PositionSettings{}.limit_x;
+    float position_limit_y = cameraunlock::PositionSettings{}.limit_y;
+    float position_limit_y_down = cameraunlock::PositionSettings{}.limit_y_down;
+    float position_limit_z = cameraunlock::PositionSettings{}.limit_z;
+    float position_limit_z_back = cameraunlock::PositionSettings{}.limit_z_back;
+
+    std::string toggle_key =
+        cameraunlock::config::schema::ConceptTraits<cameraunlock::config::schema::Concept::ToggleKey>::kCanonicalDefault;
+    std::string cycle_tracking_mode_key = cameraunlock::config::schema::ConceptTraits<
+        cameraunlock::config::schema::Concept::CycleTrackingModeKey>::kCanonicalDefault;
 };
 
-// Reads HeadTracking.ini from `exe_dir` through the frozen reader in
-// src/legacy_config/ and returns what it read. A missing file, an absent key or
-// a value the reader refuses gives the shipped default.
-Config LoadConfig(const std::string& exe_dir);
+// CameraUnlock.ini, beside Wreckfest2.exe, in cameraunlock-core's canonical
+// config format. One ConfigOwner reads and writes it; nothing else in the mod
+// touches it. HeadTracking.ini, the file every earlier build read, is imported
+// once while CameraUnlock.ini is absent and is never written.
+namespace config {
 
-// Writes the documented default HeadTracking.ini into `exe_dir`, unless one is
-// already there. Never overwrites a user's file.
-void WriteDefaultConfigIfMissing(const std::string& exe_dir);
+cameraunlock::config::ConfigTable<Config> Table();
+
+cameraunlock::config::RenderHeader Header();
+
+// HeadTracking.ini through the frozen reader in src/legacy_config/, mapped into
+// Config.
+cameraunlock::config::LegacyImport<Config> Import();
+
+// The owner's options for CameraUnlock.ini in `folder`, with HeadTracking.ini
+// beside it as the legacy file and Defaults.ini where `defaults` says.
+cameraunlock::config::ConfigOwnerOptions<Config> OwnerOptions(const std::filesystem::path& folder,
+                                                              cameraunlock::config::DefaultsFile defaults);
+
+// Reads, imports or creates CameraUnlock.ini in `folder`, logs what the owner
+// reports, and returns the settings the session runs on. Call once, from the
+// bootstrap thread, with the log open. `defaults` is DefaultsFile::PerUser() in
+// the mod.
+Config Load(const std::filesystem::path& folder, cameraunlock::config::DefaultsFile defaults);
+
+// The tracking mode the settings start in. The table never gives both rows
+// false.
+cameraunlock::TrackingMode StartupTrackingMode(const Config& config);
+
+// What the position processor runs on: the limits from the file, the smoothing
+// pair, and the pose as the tracker sends it.
+cameraunlock::PositionSettings ToPositionSettings(const Config& config);
+
+// Saves the mode the cycle hotkey has just chosen. The session keeps it whether
+// or not the save succeeds; a failed save is logged. Called on the hotkey
+// thread.
+void SaveTrackingMode(cameraunlock::TrackingMode mode);
+
+}  // namespace config
 
 }  // namespace wf2_ht

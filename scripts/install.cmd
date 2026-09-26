@@ -32,15 +32,16 @@ set "ASI_LOADER_NAME=version.dll"
 :: Wreckfest2.exe sits at the game root (games.json executable_relpath), so
 :: the payload goes beside it and there is no subdirectory to descend into.
 set "ASI_SUBDIR="
-:: The release ZIP ships no HeadTracking.ini: the mod writes its own with the
-:: documented defaults on first run, so there is nothing to seed write-if-absent.
+:: Nothing is seeded: the mod creates CameraUnlock.ini on its first start, and
+:: imports HeadTracking.ini, the file earlier versions wrote, while it is absent.
+:: A seeded CameraUnlock.ini would stop that import.
 set "MOD_SEED_FILES="
 :: Left empty so the state file omits framework.version. Nothing here or in core
 :: rewrites this line when `pixi run update-deps` bumps vendor/, so a value set
 :: now would keep reporting the old loader after the next bump.
 set "ASI_LOADER_VERSION="
 :: Post-install help text. `&echo ` starts each further line.
-set "MOD_CONTROLS=Controls:&echo   End  / Ctrl+Shift+Y - Toggle head tracking on/off&echo   PgUp / Ctrl+Shift+G - Cycle tracking mode (rotation and position / rotation only / position only)&echo.&echo Both are remappable in HeadTracking.ini, written to the game folder on first run."
+set "MOD_CONTROLS=Controls:&echo   End  / Ctrl+Shift+Y - Toggle head tracking on/off&echo   PgUp / Ctrl+Shift+G - Cycle tracking mode (rotation and position / rotation only / position only)&echo.&echo Both are remappable in CameraUnlock.ini, created in the game folder on first run."
 :: --- END CONFIG BLOCK ---
 
 :: Pin delayed expansion off before `%*` is expanded on the `call` below.

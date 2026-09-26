@@ -35,11 +35,20 @@ clean-all = { cmd = """
     powershell -Command "foreach ($d in @('build','build-tests','release')) { if (Test-Path $d) { Remove-Item $d -Recurse -Force } }; Write-Host 'All build artifacts cleaned' -ForegroundColor Green"
 """ }
 
-# Unit tests: the camera transform composition, the gameplay gate, the frozen
-# HeadTracking.ini reader, and the config differential test, which holds that
-# reader to v0.1.0's. Builds in build-tests/ so the packaged build/ tree never
-# contains a test binary. Needs no game install.
+# Unit tests: the camera transform composition, the gameplay gate, the config
+# tests, the frozen HeadTracking.ini reader, the config differential test, which
+# holds that reader to v0.1.0's and the migration into CameraUnlock.ini to the
+# reader, and core's canonical config lint over every file that test migrated.
+# Builds in build-tests/ so the packaged build/ tree never contains a test
+# binary. Needs no game install.
 test = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/run-tests.ps1" }
+build-tests = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/run-tests.ps1 -Config Debug -NoRun" }
+
+# Rewrites HeadTracking.ini, the committed CameraUnlock.ini (the path core's
+# data/config-format.json records), from the config table after a change to a
+# row, a comment or a default, then writes the launcher manifest's config
+# descriptor per_game from it. wf2_config_tests fails until it has run.
+render-config = { cmd = "build-tests/tests/Debug/wf2_config_tests.exe --render-config HeadTracking.ini && node cameraunlock-core/scripts/encode-seed.mjs", depends-on = ["build-tests"] }
 
 # Bump vendored Ultimate ASI Loader copy. Manual; commit the result.
 update-deps = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/update-deps.ps1" }

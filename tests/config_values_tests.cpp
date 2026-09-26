@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 itsloopyo
 
-// What HeadTracking.ini does with a value the mod cannot use, and - the half
-// that had no cover at all - whether it SAYS so.
+// What the frozen HeadTracking.ini reader does with a value it cannot use, and -
+// the half that had no cover at all - whether it SAYS so.
 //
-// The value side was already right: every reader in IniReader answers
-// unparseable text with the fallback its caller passed, and the loader passes
-// the value the Config already holds, so a refused key keeps what it had. What
-// was missing was the diagnostic. A refused value looked exactly like a key the
-// user never wrote, so "my INI setting is ignored" arrived with an empty log
-// and nothing to triage from, while every other refusal in config.cpp - a bad
-// port, a bad hotkey, an out-of-range float - reported itself.
+// The value side was already right: core's INI reader answers unparseable text
+// with the fallback its caller passed, and the loader passes the value the
+// Config already holds, so a refused key keeps what it had. What was missing
+// was the diagnostic. A refused value looked exactly like a key the user never
+// wrote, so "my INI setting is ignored" arrived with an empty log and nothing
+// to triage from, while every other refusal in the reader - a bad port, a bad
+// hotkey, an out-of-range float - reported itself.
 //
-// The trap is a bool with a trailing comment. GetPrivateProfileString does not
-// treat ';' as a comment introducer and ReadBool matches the WHOLE value, so
+// The trap is a bool with a trailing comment. Windows' INI API does not treat
+// ';' as a comment introducer and the bool reader matches the WHOLE value, so
 // `Enabled=0 ; no lean` matches nothing and position tracking stays on.
 //
 // The other half of this file is the regression risk the fix carries: the

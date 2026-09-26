@@ -7,8 +7,8 @@
 //
 // The failure that matters is not a wrong directory but a plausible-looking
 // empty one: a separator-less module path must NOT resolve to "", because the
-// INI path built from it would then be "\HeadTracking.ini" and the mod would
-// write the user's config to the root of whatever drive the process is on.
+// log path built from it would then be "\HeadTracking.log" and the mod would
+// write it to the root of whatever drive the process is on.
 //
 // No game needed - only the running test EXE's own module path.
 
@@ -54,7 +54,7 @@ void DirectoryOfTests() {
 }
 
 void NarrowToAnsiTests() {
-    std::printf("NarrowToAnsi converts for the ANSI-only INI layer\n");
+    std::printf("NarrowToAnsi converts for the log lines and the ANSI-only legacy import\n");
 
     std::string narrow;
     Check(NarrowToAnsi(L"C:\\Games\\Wreckfest", narrow)
@@ -80,7 +80,7 @@ void HostExeDirectoryTests() {
     if (!Check(!wide.empty(), "resolves for the running test EXE")) return;
 
     const std::string narrow = HostExeDirectoryNarrow();
-    if (!Check(!narrow.empty(), "and has an ANSI form for the INI layer")) return;
+    if (!Check(!narrow.empty(), "and has an ANSI form for the log lines")) return;
 
     Check(wide.back() != L'\\', "no trailing separator, so exe_dir + \"\\\" + name is well formed");
 

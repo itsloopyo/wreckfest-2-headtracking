@@ -1,7 +1,8 @@
 #!/usr/bin/env pwsh
 #Requires -Version 5.1
 # Build and run the unit tests in their own build directory so the normal
-# build/ tree never carries a test binary.
+# build/ tree never carries a test binary. -NoRun builds them only, for
+# render-config, whose binary is one of them.
 
 [CmdletBinding()]
 # Both configurations by default. Debug alone is what the suite used to run,
@@ -11,7 +12,10 @@
 # read, or a floating-point contraction that the 1e-5 tolerances would catch.
 # The whole suite takes about two seconds, so there is nothing to save by
 # picking one.
-param([ValidateSet('Release', 'Debug', 'Both')][string]$Config = 'Both')
+param(
+    [ValidateSet('Release', 'Debug', 'Both')][string]$Config = 'Both',
+    [switch]$NoRun
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -29,9 +33,14 @@ foreach ($c in $configs) {
 
     cmake --build $buildDir --config $c --target wf2_tests
     if ($LASTEXITCODE -ne 0) { throw "Test build failed for $c ($LASTEXITCODE)" }
+    if ($NoRun) { continue }
 
     ctest --test-dir $buildDir -C $c --output-on-failure
     if ($LASTEXITCODE -ne 0) { throw "Tests failed for $c ($LASTEXITCODE)" }
 }
 
-Write-Host "All tests passed ($($configs -join ', '))" -ForegroundColor Green
+if ($NoRun) {
+    Write-Host "Tests built ($($configs -join ', '))" -ForegroundColor Green
+} else {
+    Write-Host "All tests passed ($($configs -join ', '))" -ForegroundColor Green
+}
