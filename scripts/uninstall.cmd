@@ -23,8 +23,8 @@ set "STATE_FILE=.headtracking-state.json"
 :: | BeamNGUserMods | None
 set "FRAMEWORK_TYPE=ASILoader"
 :: DLL names shipped by older versions of this mod, removed too so an upgrade
-:: does not leave a second copy for the loader to bind. Empty: this mod has had
-:: no prior release, so there is no earlier filename in the wild.
+:: does not leave a second copy for the loader to bind. Empty: every release has
+:: shipped Wreckfest2HeadTracking.asi, so there is no earlier filename.
 set "LEGACY_DLLS="
 :: BepInEx: subfolder under BepInEx\plugins\ the DLLs were deployed into.
 set "PLUGIN_SUBFOLDER="
