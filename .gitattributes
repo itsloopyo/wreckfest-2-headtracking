@@ -6,3 +6,5 @@
 *.asi binary
 *.zip binary
 *.gif binary
+tests/config_differential/data/** -text
+tests/config_differential/oracle/src/** -text

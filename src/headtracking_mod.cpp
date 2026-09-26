@@ -163,7 +163,7 @@ bool OpenLogAndResolveGameDirectory(std::string& exe_dir) {
 
 void LoadAndApplyConfig(const std::string& exe_dir) {
     WriteDefaultConfigIfMissing(exe_dir);
-    LoadConfig(exe_dir, g_config);
+    g_config = LoadConfig(exe_dir);
     Log::Line("[boot] config: port=%u enableOnStartup=%d localSmoothing=%.2f "
               "remoteSmoothing=%.2f position=%d",
               static_cast<unsigned>(g_config.udp_port), g_config.enable_on_startup ? 1 : 0,

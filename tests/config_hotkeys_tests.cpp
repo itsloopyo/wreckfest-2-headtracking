@@ -8,7 +8,7 @@
 // rather than on nothing, which is the difference between one hotkey not moving
 // and a hotkey silently disappearing.
 
-#include "config.h"
+#include "legacy_config/legacy_config.h"
 
 #include "test_support.h"
 
@@ -18,6 +18,7 @@
 #include <string>
 
 using namespace wf2_ht;
+using namespace wf2_ht::legacy;
 using wf_test::Check;
 
 namespace {
@@ -61,7 +62,7 @@ Config Load(const char* body) {
     std::fclose(f);
 
     Config cfg;
-    LoadConfig(g_dir, cfg);
+    LoadConfig(IniPath(), cfg);
     return cfg;
 }
 

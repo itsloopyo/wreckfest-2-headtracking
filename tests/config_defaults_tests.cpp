@@ -11,6 +11,7 @@
 // real loader.
 
 #include "config.h"
+#include "legacy_config/legacy_config.h"
 
 #include "test_support.h"
 
@@ -52,9 +53,10 @@ void RemoveTempDir(const std::string& dir) {
     RemoveDirectoryA(dir.c_str());
 }
 
-// Every field of Config, compared against a default-constructed one. Loading a
-// file that says exactly what the defaults say must leave the struct untouched.
-void CheckMatchesDefaults(const Config& cfg, const char* source) {
+// Every field the frozen reader filled, compared against a default-constructed
+// runtime Config. Loading a file that says exactly what the defaults say must
+// leave the struct at the shipped defaults.
+void CheckMatchesDefaults(const legacy::Config& cfg, const char* source) {
     const Config defaults;
     std::printf("%s\n", source);
 
@@ -81,8 +83,8 @@ void CheckMatchesDefaults(const Config& cfg, const char* source) {
 // tests below: poisoning only some fields in one of them made that test compare
 // default against default for the rest, so a key missing from the file under
 // test would have passed.
-Config Poisoned() {
-    Config cfg;
+legacy::Config Poisoned() {
+    legacy::Config cfg;
     cfg.udp_port = 5555;
     cfg.enable_on_startup = false;
     cfg.toggle_key = 0x70;
@@ -129,8 +131,8 @@ void GeneratedDefaultsTests() {
     Check(GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES,
           "is written when none exists");
 
-    Config cfg = Poisoned();
-    LoadConfig(dir, cfg);
+    legacy::Config cfg = Poisoned();
+    legacy::LoadConfig(path, cfg);
     CheckMatchesDefaults(cfg, "The generated file loads back as the built-in defaults");
 
     ReferenceIniIsTheGeneratedFileTest(dir);
@@ -144,8 +146,8 @@ void GeneratedDefaultsTests() {
         std::fclose(f);
     }
     WriteDefaultConfigIfMissing(dir);
-    Config edited;
-    LoadConfig(dir, edited);
+    legacy::Config edited;
+    legacy::LoadConfig(path, edited);
     Check(edited.udp_port == 5000, "an existing HeadTracking.ini is never overwritten");
 
     RemoveTempDir(dir);
@@ -154,9 +156,15 @@ void GeneratedDefaultsTests() {
 void ReferenceIniTests() {
     // WF2_SOURCE_DIR is the repo root, where the reference HeadTracking.ini
     // that ships as documentation lives.
-    Config cfg = Poisoned();
-    LoadConfig(WF2_SOURCE_DIR, cfg);
+    legacy::Config cfg = Poisoned();
+    legacy::LoadConfig(std::string(WF2_SOURCE_DIR) + "\\HeadTracking.ini", cfg);
     CheckMatchesDefaults(cfg, "The reference HeadTracking.ini at the repo root");
+}
+
+void FrozenDefaultsTests() {
+    // The frozen reader starts from its own copy of the defaults, so a file
+    // with no keys at all has to mean what it meant to the runtime Config.
+    CheckMatchesDefaults(legacy::Config{}, "The frozen reader's defaults");
 }
 
 }  // namespace
@@ -166,5 +174,6 @@ int main() {
     std::printf("=====================================================\n");
     GeneratedDefaultsTests();
     ReferenceIniTests();
+    FrozenDefaultsTests();
     return wf_test::Summary("config defaults");
 }
