@@ -287,7 +287,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ## cameraunlock-core
 
-- **Version:** commit `992b9109dbe3d3af8de0b0302df9db758c14370d`
+- **Version:** commit `3f3a821aa00d5b87ecde7c4af77585ff2fc71ff5`
 - **License:** MIT
 - **Upstream:** https://github.com/itsloopyo/cameraunlock-core
 - **Usage:** Shared head tracking runtime: the OpenTrack UDP receiver, pose
