@@ -63,11 +63,7 @@ package = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/package-rele
 validate-manifest = "node cameraunlock-core/scripts/validate-manifest.mjs"
 validate-notices = "node cameraunlock-core/scripts/validate-notices.mjs"
 
-# The fleet-wide repo shape check. Not wired into CI: it currently fails on the
-# README's opening sentence, which is the fixed template AGENTS.md mandates
-# word for word, so the rule and the template contradict each other and the
-# conflict lives in cameraunlock-core rather than here. Declared so it is at
-# least runnable, and so the next session finds it rather than rediscovering it.
+# The fleet-wide repo shape check from the vendored core, run against this repo.
 conformance = "powershell -ExecutionPolicy Bypass -File cameraunlock-core/scripts/conformance.ps1"
 
 # Dev loop: build, then copy the .asi + vendored loader straight into the
