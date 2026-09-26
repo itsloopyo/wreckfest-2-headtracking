@@ -1,12 +1,8 @@
 # Changelog
 
-## [0.1.0] - 2026-09-05
-
-### Other
-
-- Hello world
-
 ## [Unreleased]
+
+## [0.1.0] - 2026-09-05
 
 ### Added
 - Head tracking now follows the head through the grid countdown, not just from the green light. The gate reads the engine's race phase instead of its green light byte, so the view follows while the lights are still counting down.
