@@ -18,6 +18,24 @@ if (-not (Test-Path $module)) {
 }
 Import-Module $module -Force
 
+# Not Get-FileHash: Windows PowerShell 5.1 autoloads it from a script module,
+# and a powershell.exe started from pwsh (GitHub Actions' shell: pwsh)
+# inherits pwsh's PSModulePath, resolves the Core-only
+# Microsoft.PowerShell.Utility first and reports the cmdlet as not recognized.
+function Get-Sha256Hex {
+    [OutputType([string])]
+    param([Parameter(Mandatory)][string]$LiteralPath)
+
+    $sha    = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead((Convert-Path -LiteralPath $LiteralPath))
+    try {
+        return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $stream.Dispose()
+        $sha.Dispose()
+    }
+}
+
 $vendorDir  = Join-Path $projectDir 'vendor/ultimate-asi-loader'
 $vendorDll  = Join-Path $vendorDir 'dinput8.dll'
 $readmePath = Join-Path $vendorDir 'README.md'
@@ -27,7 +45,7 @@ $readmePath = Join-Path $vendorDir 'README.md'
 # against the release zip, and what we keep here is the DLL unwrapped from that
 # zip, so the hashes never match and every run would otherwise rewrite README.md
 # with a fresh "Fetched at" - a no-op refresh that reads as a loader bump.
-$previousDllSha = if (Test-Path $vendorDll) { (Get-FileHash -Path $vendorDll -Algorithm SHA256).Hash.ToLowerInvariant() } else { $null }
+$previousDllSha = if (Test-Path $vendorDll) { Get-Sha256Hex -LiteralPath $vendorDll } else { $null }
 $previousReadme = if (Test-Path $readmePath) { [System.IO.File]::ReadAllBytes($readmePath) } else { $null }
 
 # -LicenseName rather than -LicenseUrl: the module resolves the name against the
@@ -63,7 +81,7 @@ if ($bytes.Length -ge 2 -and $bytes[0] -eq 0x50 -and $bytes[1] -eq 0x4B) {
     }
 }
 
-$dllSha = (Get-FileHash -Path $vendorDll -Algorithm SHA256).Hash.ToLowerInvariant()
+$dllSha = Get-Sha256Hex -LiteralPath $vendorDll
 
 if ($previousReadme -and $dllSha -eq $previousDllSha) {
     [System.IO.File]::WriteAllBytes($readmePath, $previousReadme)
