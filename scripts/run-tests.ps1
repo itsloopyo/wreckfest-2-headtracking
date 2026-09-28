@@ -14,7 +14,8 @@
 # picking one.
 param(
     [ValidateSet('Release', 'Debug', 'Both')][string]$Config = 'Both',
-    [switch]$NoRun
+    [switch]$NoRun,
+    [ValidateSet('all', 'unit', 'differential')][string]$Suite = 'all'
 )
 
 Set-StrictMode -Version Latest
@@ -35,7 +36,8 @@ foreach ($c in $configs) {
     if ($LASTEXITCODE -ne 0) { throw "Test build failed for $c ($LASTEXITCODE)" }
     if ($NoRun) { continue }
 
-    ctest --test-dir $buildDir -C $c --output-on-failure
+    $labels = @{ all = @(); unit = @('-LE', 'differential'); differential = @('--no-tests=error', '-L', 'differential') }[$Suite]
+    ctest --test-dir $buildDir -C $c --output-on-failure @labels
     if ($LASTEXITCODE -ne 0) { throw "Tests failed for $c ($LASTEXITCODE)" }
 }
 

@@ -35,13 +35,15 @@ clean-all = { cmd = """
     powershell -Command "foreach ($d in @('build','build-tests','release')) { if (Test-Path $d) { Remove-Item $d -Recurse -Force } }; Write-Host 'All build artifacts cleaned' -ForegroundColor Green"
 """ }
 
-# Unit tests: the camera transform composition, the gameplay gate, the config
-# tests, the frozen HeadTracking.ini reader, the config differential test, which
-# holds that reader to v0.1.0's and the migration into CameraUnlock.ini to the
-# reader, and core's canonical config lint over every file that test migrated.
-# Builds in build-tests/ so the packaged build/ tree never contains a test
-# binary. Needs no game install.
-test = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/run-tests.ps1" }
+# test-unit: the camera transform composition, the gameplay gate, the config
+# tests and the frozen HeadTracking.ini reader. test-differential: the config
+# differential test, which holds that reader to v0.1.0's and the migration into
+# CameraUnlock.ini to the reader, and core's canonical config lint over every
+# file that test migrated. Builds in build-tests/ so the packaged build/ tree
+# never contains a test binary. Needs no game install.
+test-unit = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/run-tests.ps1 -Suite unit" }
+test-differential = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/run-tests.ps1 -Suite differential" }
+test = { depends-on = ["test-unit", "test-differential"] }
 build-tests = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/run-tests.ps1 -Config Debug -NoRun" }
 
 # Rewrites HeadTracking.ini, the committed CameraUnlock.ini (the path core's
@@ -55,7 +57,7 @@ update-deps = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/update-d
 
 # Depends on test, so no ZIP is built from a tree whose tests or config
 # differential test fail.
-package = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1", depends-on = ["build", "test"] }
+package = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1", depends-on = ["build", "test-unit"] }
 
 # Release gates, run against what `package` just produced. Kept out of
 # `package`'s depends-on so a packaging run stays a packaging run; CI and the
