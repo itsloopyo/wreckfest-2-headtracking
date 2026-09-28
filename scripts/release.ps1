@@ -15,22 +15,6 @@ $ErrorActionPreference = "Stop"
 $projectDir = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $projectDir "cameraunlock-core/powershell/ReleaseWorkflow.psm1") -Force
 
-# Mirrors New-ChangelogFromCommits' insertion so a -Force maintenance entry
-# lands in the same place with the same shape.
-function Add-MaintenanceChangelogEntry {
-    param([string]$Path, [string]$NewVersion)
-    $date = Get-Date -Format 'yyyy-MM-dd'
-    $entry = "## [$NewVersion] - $date`n`n### Changed`n`n- Maintenance release (no user-facing changes).`n`n"
-    $changelog = Get-Content $Path -Raw
-    if ($changelog -match '(?s)(# Changelog.*?)(## \[)') {
-        $changelog = $changelog -replace '(?s)(# Changelog.*?\n\n)', "`$1$entry"
-    } else {
-        $changelog = $changelog -replace '(?s)(# Changelog.*?\n)', "`$1$entry"
-    }
-    $changelog = $changelog.TrimEnd() + "`n"
-    Set-Content $Path $changelog -NoNewline
-}
-
 if ([string]::IsNullOrWhiteSpace($Version)) {
     Write-Error "Usage: pixi run release <major|minor|patch|nightly|X.Y.Z>"
     exit 1
@@ -100,32 +84,13 @@ if ($LASTEXITCODE -ne 0) {
 #    mutating any version files or building - a failure here then leaves a
 #    clean tree instead of stranding a half-applied version bump with no tag.
 Write-Host "Generating CHANGELOG..." -ForegroundColor Cyan
-$hasExistingTags = git tag -l 2>$null
-$changelogHasThisVersion = (Test-Path $changelogPath) -and
-    ((Get-Content -Raw $changelogPath) -match [regex]::Escape("## [$newVersion]"))
-if (-not $hasExistingTags -and -not (Test-Path $changelogPath)) {
-    $date = Get-Date -Format 'yyyy-MM-dd'
-    "# Changelog`n`n## [$newVersion] - $date`n`nFirst release.`n" | Set-Content $changelogPath
-    Write-Host "  Wrote initial CHANGELOG.md" -ForegroundColor Gray
-} elseif ($changelogHasThisVersion) {
-    Write-Host "  CHANGELOG.md already has a [$newVersion] section" -ForegroundColor Gray
-} else {
-    # Reached on the FIRST tagged release too, when a pre-release CHANGELOG.md
-    # already exists. The old shape skipped generation entirely in that case, so
-    # the release commit bumped every version file and shipped a changelog whose
-    # newest entry was still the pre-release one. New-ChangelogFromCommits
-    # handles "no previous tag" by taking every commit, which is what is wanted.
-    try {
-        New-ChangelogFromCommits -ChangelogPath $changelogPath -Version $newVersion | Out-Null
-    } catch {
-        if (-not $Force) {
-            Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host "No user-facing changes to release. Re-run with -Force for a maintenance release." -ForegroundColor Yellow
-            exit 1
-        }
-        Write-Host "No user-facing commits since last tag - writing maintenance entry (-Force)." -ForegroundColor Yellow
-        Add-MaintenanceChangelogEntry -Path $changelogPath -NewVersion $newVersion
-    }
+try {
+    New-ChangelogFromCommits -ChangelogPath $changelogPath -Version $newVersion -Maintenance:$Force | Out-Null
+} catch {
+    if ($Force) { throw }
+    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "No user-facing changes to release. Re-run with -Force for a maintenance release." -ForegroundColor Yellow
+    exit 1
 }
 
 # 4. Bump the canonical version, then mirror it into every derived copy.
