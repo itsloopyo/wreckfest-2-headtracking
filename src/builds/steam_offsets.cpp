@@ -10,6 +10,49 @@
 
 namespace wf2_ht::builds {
 
+// Wreckfest 2, Steam app 1203190, Wreckfest2.exe built 2026-10-15 09:45:59 UTC.
+// The patch moved more than code: the view manager grew 0x130 bytes ahead of its
+// embedded cameras, so the render camera sits at +0x1340; GameplayState grew,
+// moving the race phase and the countdown; and the pause chain's object and flag
+// moved by 0x10. The BCORE::Camera layout, the race phase values and the network
+// state fields are unchanged. Derived by the same route as the profile below,
+// recorded in .lab/NOTES.md.
+extern const BuildProfile kSteamProfile_20261015 = {
+    "steam-win64-20261015",
+    { 0x6AD0A0D7, 0x04F67000, 0x00000000 },
+    {
+        /* view_manager_update_rva         */ 0x000D1670,
+        /* camera_view_matrix_rva          */ 0x00B02020,
+        /* camera_world_transform          */ 0x10,
+        /* camera_world_transform_floats   */ 16,
+        /* view_manager_ptr_rva            */ 0x015BBE88,
+        /* view_manager_render_camera      */ 0x1340,
+        /* view_manager_active_controller  */ 0x28,
+        /* garage_camera_vtable_rva        */ 0x00D37598,
+        /* car_paint_camera_vtable_rva     */ 0x00D33458,
+        /* car_camera_vtable_rva           */ 0x00D33340,
+        /* free_camera_vtable_rva          */ 0x00D36310,
+        /* track_side_camera_vtable_rva    */ 0x00D37238,
+        /* animated_camera_vtable_rva      */ 0x00D37568,
+        /* photo_mode_camera_vtable_rva    */ 0x00D37608,
+        /* gameplay_state_ptr_rva          */ 0x015BBE98,
+        /* race_phase_offset               */ 0x15D0,
+        /* race_phase_countdown            */ 2,
+        /* race_phase_racing               */ 3,
+        /* countdown_ms_offset             */ 0x1574,
+        /* pause_state_ptr_rva             */ 0x015BBB48,
+        /* pause_state_object              */ 0x70,
+        /* pause_state_paused              */ 0x59,
+        /* net_client_ptr_rva              */ 0x015BBEA8,
+        /* net_client_state                */ 0x370,
+        /* net_client_session_lo           */ 3,
+        /* net_client_session_hi           */ 6,
+        /* net_server_ptr_rva              */ 0x015BBEB0,
+        /* net_server_state                */ 0x108,
+    },
+};
+
+
 // Wreckfest 2, Steam app 1203190, Wreckfest2.exe built 2026-07-09 12:50:52 UTC.
 // CheckSum is 0 in the shipped EXE - the linker never stamped one - so the
 // fingerprint leans on TimeDateStamp + SizeOfImage, exactly as Wreckfest 1's

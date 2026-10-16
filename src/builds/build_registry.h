@@ -12,6 +12,7 @@ namespace wf2_ht::builds {
 // Append-only. Newest build first: the top entry is the diagnostic primary
 // that the "unknown build" log line compares against to say whether the
 // running EXE is newer or older than anything this mod knows about.
+extern const BuildProfile kSteamProfile_20261015;
 extern const BuildProfile kSteamProfile_20260709;
 
 extern const BuildProfile* const kKnownProfiles[];

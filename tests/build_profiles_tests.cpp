@@ -72,6 +72,41 @@ void TheShippedSteamProfileTest() {
     Check(IsProfileComplete(p), "is complete, so the mod will engage on it");
 }
 
+// Steam app 1203190, Wreckfest2.exe built 2026-10-15. Values from .lab/NOTES.md,
+// "Build steam-win64-20261015".
+void TheOctoberSteamProfileTest() {
+    std::printf("The steam-win64-20261015 profile\n");
+
+    const BuildProfile& p = kSteamProfile_20261015;
+    Check(std::string(p.Name) == "steam-win64-20261015", "is named store-platform-YYYYMMDD");
+
+    CheckOffset(p.Fingerprint.TimeDateStamp, 0x6AD0A0D7u, "TimeDateStamp");
+    CheckOffset(p.Fingerprint.SizeOfImage, 0x04F67000u, "SizeOfImage");
+    CheckOffset(p.Fingerprint.CheckSum, 0x00000000u, "CheckSum (never stamped by this linker)");
+
+    CheckOffset(p.Offsets.view_manager_update_rva, 0x000D1670u, "ViewManager::Update RVA");
+    CheckOffset(p.Offsets.camera_view_matrix_rva, 0x00B02020u, "Camera::UpdateViewMatrix RVA");
+    CheckOffset(p.Offsets.camera_world_transform, 0x10u, "camera-to-world transform offset");
+    CheckOffset(p.Offsets.camera_world_transform_floats, 16u, "a 4x4 of floats");
+    CheckOffset(p.Offsets.view_manager_ptr_rva, 0x015BBE88u, "view manager static");
+    CheckOffset(p.Offsets.view_manager_render_camera, 0x1340u, "embedded render camera offset");
+    CheckOffset(p.Offsets.view_manager_active_controller, 0x28u, "active controller offset");
+    CheckOffset(p.Offsets.gameplay_state_ptr_rva, 0x015BBE98u, "GameplayState static");
+    CheckOffset(p.Offsets.race_phase_offset, 0x15D0u, "race phase offset");
+    CheckOffset(p.Offsets.race_phase_countdown, 2u, "the grid countdown is phase 2");
+    CheckOffset(p.Offsets.race_phase_racing, 3u, "a running race is phase 3");
+    CheckOffset(p.Offsets.countdown_ms_offset, 0x1574u, "countdown milliseconds offset");
+    CheckOffset(p.Offsets.pause_state_ptr_rva, 0x015BBB48u, "pause static");
+    CheckOffset(p.Offsets.pause_state_object, 0x70u, "pause object offset");
+    CheckOffset(p.Offsets.pause_state_paused, 0x59u, "pause flag offset");
+    CheckOffset(p.Offsets.net_client_ptr_rva, 0x015BBEA8u, "NetClient static");
+    CheckOffset(p.Offsets.net_client_state, 0x370u, "NetClient state offset");
+    CheckOffset(p.Offsets.net_server_ptr_rva, 0x015BBEB0u, "NetServer static");
+    CheckOffset(p.Offsets.net_server_state, 0x108u, "NetServer state offset");
+
+    Check(IsProfileComplete(p), "is complete, so the mod will engage on it");
+}
+
 // The completeness gate is what stops a placeholder profile - fingerprint
 // derived, offsets not - from being activated. It is a sample rather than a
 // full audit (the controller vtables and the network offsets are not in it),
@@ -153,6 +188,7 @@ int main() {
     std::printf("Wreckfest 2 head tracking - build profile tests\n");
     std::printf("========================================================\n");
     TheShippedSteamProfileTest();
+    TheOctoberSteamProfileTest();
     TheCompletenessGateTest();
     TheRegistryTest();
     return wf_test::Summary("build profiles");
