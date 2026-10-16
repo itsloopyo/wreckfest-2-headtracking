@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.1] - 2026-10-16
+
+### Fixed
+
+- add build profile for the 2026-10-15 Steam patch
+
 ## [0.2.0] - 2026-09-30
 
 ### Added
