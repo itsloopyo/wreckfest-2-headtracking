@@ -148,7 +148,8 @@ THE SOFTWARE.
   comparing every vendored file against upstream's tree.
 - **License:** BSD-2-Clause
 - **Upstream:** https://github.com/TsudaKageyu/minhook
-- **Usage:** Installs the trampoline hook on the camera update entry point.
+- **Usage:** Installs the trampoline hooks on the two engine functions the mod
+  detours, the view manager update and the camera's view matrix update.
   Compiled into the `.asi`.
 - **Bundled:** yes, statically linked into `Wreckfest2HeadTracking.asi`.
 - **Modified:** yes, in one file. `src/hook.c` takes its allocator from
@@ -332,5 +333,23 @@ SOFTWARE.
   port 4242. Protocol compatibility only; no source, binary or asset is taken
   from the project.
 - **Bundled:** no.
+
+---
+
+## Wreckfest 2
+
+- **License:** proprietary, Bugbear Entertainment and THQ Nordic.
+- **Usage:** The mod hooks two of the running game's functions (the view
+  manager update and the camera's view matrix update) and reads its race,
+  pause and network state. The addresses of those functions, the statics that
+  hold the game's singletons and the field offsets inside them come from the
+  game's own executable: derived from each Steam build listed in
+  `src/builds/steam_offsets.cpp`, and on any other build located at startup
+  from the executable's RTTI class names, a few constants the camera
+  constructor stores, two event name strings, and the calls between its
+  functions. The class names (`romu::GameplayState`, `romu::NetClient`,
+  `romu::CarCamera` and the rest) are the game's own, as its RTTI records them.
+- **Bundled:** no. No code, data or asset from the game is in this repository
+  or in the release.
 
 ---

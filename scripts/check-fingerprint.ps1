@@ -4,9 +4,9 @@
 # installed Wreckfest2.exe, or of the one passed with -ExePath, and compare it
 # against the measured build profiles in src/builds/steam_offsets.cpp.
 #
-# A build with no profile is not a dormant build: the mod resolves its addresses
-# at startup through runtime discovery and runs on those. `pixi run test` maps
-# every installed copy, runs the same discovery and prints what it finds.
+# A build with no profile is not dormant if runtime discovery resolves it at
+# startup. `pixi run test` maps every installed copy and runs the same
+# discovery on it.
 
 [CmdletBinding()]
 param([string]$ExePath)
@@ -55,9 +55,8 @@ foreach ($exe in $exes) {
     $sizeOfImage   = [BitConverter]::ToUInt32($bytes, $optHdr + 56)
     $checkSum      = [BitConverter]::ToUInt32($bytes, $optHdr + 64)
 
-    $built = [DateTimeOffset]::FromUnixTimeSeconds($timeDateStamp).UtcDateTime
     Write-Host "EXE: $exe"
-    Write-Host ("  TimeDateStamp 0x{0:X8}  ({1:yyyy-MM-dd HH:mm:ss} UTC)" -f $timeDateStamp, $built)
+    Write-Host ("  TimeDateStamp 0x{0:X8}" -f $timeDateStamp)
     Write-Host ("  SizeOfImage   0x{0:X8}" -f $sizeOfImage)
     Write-Host ("  CheckSum      0x{0:X8}" -f $checkSum)
 
@@ -72,8 +71,8 @@ foreach ($exe in $exes) {
         }
     }
     if (-not $matched) {
-        Write-Host "  No measured profile matches this EXE. The mod resolves it through runtime discovery;" -ForegroundColor Yellow
-        Write-Host "  'pixi run test' shows what discovery finds on it, and HeadTracking.log what a launch ran on."
+        Write-Host "  No measured profile matches this EXE. At startup the mod tries runtime discovery on it;" -ForegroundColor Yellow
+        Write-Host "  'pixi run test' shows whether discovery resolves it, and HeadTracking.log what a launch ran on."
     }
     Write-Host ""
 }
