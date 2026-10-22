@@ -29,6 +29,19 @@ if ($LASTEXITCODE -ne 0) { throw "CMake configure failed ($LASTEXITCODE)" }
 
 if ($Config -eq 'Both') { $configs = @('Debug', 'Release') } else { $configs = @($Config) }
 
+# The runtime discovery test resolves every installed copy of the game from
+# scratch and checks it against its measured profile. None installed (CI, or a
+# contributor without the game) leaves the variable empty and that check unrun.
+Import-Module (Join-Path $projectDir 'cameraunlock-core/powershell/GamePathDetection.psm1') -Force
+$gameExe = (Get-GameConfigs)['wreckfest-2'].Executable
+$installed = @(Find-AllGamePaths -GameId 'wreckfest-2' | ForEach-Object { Join-Path $_ $gameExe })
+$env:WF2_GAME_EXES = $installed -join ';'
+if ($installed.Count -eq 0) {
+    Write-Host 'No installed Wreckfest 2 found: the real-image discovery check will not run.' -ForegroundColor Yellow
+} else {
+    $installed | ForEach-Object { Write-Host "Real-image discovery check: $_" }
+}
+
 foreach ($c in $configs) {
     Write-Host "--- $c ---" -ForegroundColor Cyan
 

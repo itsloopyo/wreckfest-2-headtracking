@@ -257,7 +257,8 @@ bool BootstrapMod() {
     // sees an unattributed game crash and a log that stops mid-line.
     cameraunlock::diagnostics::InstallCrashHandler();
 
-    if (builds::SelectProfile(GetModuleHandleW(nullptr)) != builds::ProfileSelection::Matched) {
+    const builds::ProfileSelection selection = builds::SelectProfile(GetModuleHandleW(nullptr));
+    if (selection != builds::ProfileSelection::Matched && selection != builds::ProfileSelection::Discovered) {
         Log::Line("[boot] no usable build profile - mod is dormant, game runs vanilla.");
         return true;
     }

@@ -30,8 +30,9 @@ if(MSVC)
 endif()
 
 # HOOKS carries hooks/hook_manager.cpp, the MinHook wrapper the camera hook
-# places its detour through. DISCOVERY stays off: this mod reaches the camera
-# through the RVA its build profile pins, not by RTTI vtable resolution.
+# places its detour through. Core's DISCOVERY module stays off: it probes live
+# camera objects, where this mod resolves its addresses from the image itself
+# (src/builds/runtime_discovery.cpp).
 set(CAMERAUNLOCK_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(CAMERAUNLOCK_BUILD_HOOKS ON CACHE BOOL "" FORCE)
 set(CAMERAUNLOCK_BUILD_DISCOVERY OFF CACHE BOOL "" FORCE)
@@ -49,9 +50,18 @@ set(MOD_SOURCES
     src/render_diagnostics.cpp
     src/builds/build_registry.cpp
     src/builds/steam_offsets.cpp
+    src/builds/runtime_discovery.cpp
+    src/builds/x64_decode.cpp
 )
 
 add_library(Wreckfest2HeadTracking SHARED ${MOD_SOURCES})
+
+# A dev build that skips the measured profiles, so a launch on a build that has
+# one still exercises the runtime discovery route. Never on for a release.
+option(WF2_DEV_DISCOVERY_ONLY "Dev build: ignore measured build profiles" OFF)
+if(WF2_DEV_DISCOVERY_ONLY)
+    target_compile_definitions(Wreckfest2HeadTracking PRIVATE WF2_DEV_DISCOVERY_ONLY)
+endif()
 
 # The same /WX the tests carry. The three files that appear in no test target -
 # dllmain, headtracking_mod and camera_hook - are the ones doing reinterpret_cast
@@ -64,6 +74,7 @@ endif()
 
 target_include_directories(Wreckfest2HeadTracking PRIVATE
     src
+    extern/minhook/src
     cameraunlock-core/cpp/include
 )
 
@@ -93,12 +104,22 @@ option(WF2_BUILD_TESTS "Build Wreckfest2HeadTracking unit tests" OFF)
 if(WF2_BUILD_TESTS)
     enable_testing()
 
+    # The build registry runs runtime discovery, so anything compiling it takes
+    # the resolver and its decoder along, and links minhook for hde64.
+    set(WF2_REGISTRY_SOURCES
+        src/builds/build_registry.cpp
+        src/builds/steam_offsets.cpp
+        src/builds/runtime_discovery.cpp
+        src/builds/x64_decode.cpp
+    )
+
     function(wf2_add_test test_name)
         set(target "wf2_${test_name}_tests")
         add_executable(${target} tests/${test_name}_tests.cpp ${ARGN})
         target_include_directories(${target} PRIVATE
             src
             cameraunlock-core/cpp/include
+            extern/minhook/src
         )
         set_target_properties(${target} PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
@@ -127,16 +148,20 @@ if(WF2_BUILD_TESTS)
     # translation unit. Reading the engine's state needs the game; deciding
     # what each state means for tracking does not. The build registry comes
     # along because InitGameState resolves its offsets from the active profile.
-    wf2_add_test(game_state src/game_state.cpp
-                src/builds/build_registry.cpp src/builds/steam_offsets.cpp)
-    target_link_libraries(wf2_game_state_tests PRIVATE cameraunlock)
+    wf2_add_test(game_state src/game_state.cpp ${WF2_REGISTRY_SOURCES})
+    target_link_libraries(wf2_game_state_tests PRIVATE cameraunlock minhook)
 
     # The per-build offset registry. Append-only is a policy the compiler cannot
     # enforce, so the shipped profile's fingerprint and every offset the render
     # path uses are pinned here against .lab/NOTES.md, along with the newest-
     # first ordering the "unknown build" diagnostic depends on.
-    wf2_add_test(build_profiles src/builds/build_registry.cpp src/builds/steam_offsets.cpp)
-    target_link_libraries(wf2_build_profiles_tests PRIVATE cameraunlock)
+    wf2_add_test(build_profiles ${WF2_REGISTRY_SOURCES})
+    target_link_libraries(wf2_build_profiles_tests PRIVATE cameraunlock minhook)
+
+    # Runtime discovery: synthetic images built in the test, and every installed
+    # Wreckfest2.exe named in WF2_GAME_EXES checked against its measured profile.
+    wf2_add_test(runtime_discovery ${WF2_REGISTRY_SOURCES})
+    target_link_libraries(wf2_runtime_discovery_tests PRIVATE cameraunlock minhook)
 
     # Where a centred window starts. The rest of the centring is Win32 calls
     # that need a desktop and a running game; the arithmetic that decides the
@@ -150,9 +175,8 @@ if(WF2_BUILD_TESTS)
     # the log readable. Drives each latch through one designed sequence and reads
     # the file back. game_state comes along for ViewStateName, and the build
     # registry behind it.
-    wf2_add_test(render_diagnostics src/render_diagnostics.cpp src/game_state.cpp
-                src/builds/build_registry.cpp src/builds/steam_offsets.cpp)
-    target_link_libraries(wf2_render_diagnostics_tests PRIVATE cameraunlock)
+    wf2_add_test(render_diagnostics src/render_diagnostics.cpp src/game_state.cpp ${WF2_REGISTRY_SOURCES})
+    target_link_libraries(wf2_render_diagnostics_tests PRIVATE cameraunlock minhook)
 
     # The committed config against the table's fresh render, the fleet's
     # default hotkeys, and the mode cycle's save. `wf2_config_tests
