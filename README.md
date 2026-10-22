@@ -194,7 +194,7 @@ Field of view is a game setting, not a mod setting. Wreckfest 2 has its own `CHA
 **Mod not loading**
 
 - Check for `HeadTracking.log` next to `Wreckfest2.exe`. No log file means the ASI loader never ran: confirm `version.dll` and `Wreckfest2HeadTracking.asi` are both in that folder.
-- If the log says the mod is staying dormant on an unrecognised build, the game has been patched since this release. The mod installs no hooks in that state and the game runs vanilla. Check the [Releases](https://github.com/itsloopyo/wreckfest-2-headtracking/releases) page for a build that knows your version.
+- The mod locates the game's camera and race state in the running game each time it starts, rather than relying on addresses fixed for one game version. If a patch changes something it relies on, the log says `runtime discovery failed` with the check that failed, followed by `staying fully dormant`. The mod installs no hooks in that state and the game runs vanilla. Check the [Releases](https://github.com/itsloopyo/wreckfest-2-headtracking/releases) page for a build that supports your version.
 
 **No tracking response**
 

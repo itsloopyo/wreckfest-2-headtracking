@@ -251,8 +251,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 - **License:** BSD-2-Clause
 - **Upstream:** https://github.com/TsudaKageyu/minhook (bundled by MinHook
   upstream)
-- **Usage:** Length disassembly for MinHook's trampoline construction.
-  Compiled into the `.asi`.
+- **Usage:** Length disassembly for MinHook's trampoline construction, and for
+  the mod's runtime discovery, which decodes the running game's code at startup
+  to locate the functions it hooks and the fields it reads. Compiled into the
+  `.asi`.
 - **Bundled:** yes, statically linked into `Wreckfest2HeadTracking.asi`.
 
 ```
