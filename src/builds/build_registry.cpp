@@ -11,6 +11,7 @@ using cameraunlock::memory::PeFingerprint;
 namespace wf2_ht::builds {
 
 const BuildProfile* const kKnownProfiles[] = {
+    &kSteamProfile_20261022,
     &kSteamProfile_20261015,
     &kSteamProfile_20260709,
 };

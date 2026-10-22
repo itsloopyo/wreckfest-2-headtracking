@@ -10,6 +10,47 @@
 
 namespace wf2_ht::builds {
 
+// Wreckfest 2, Steam app 1203190, Wreckfest2.exe built 2026-10-22 12:51:54 UTC.
+// Code and statics moved; the view manager grew 0x10 bytes ahead of its
+// embedded cameras, so the render camera sits at +0x1350. GameplayState, the
+// pause chain and the network state fields kept their layout. Derived by the
+// same route as the profiles below, recorded in .lab/NOTES.md.
+extern const BuildProfile kSteamProfile_20261022 = {
+    "steam-win64-20261022",
+    { 0x6ADA06EA, 0x04F75000, 0x00000000 },
+    {
+        /* view_manager_update_rva         */ 0x000D1AF0,
+        /* camera_view_matrix_rva          */ 0x00B0C480,
+        /* camera_world_transform          */ 0x10,
+        /* camera_world_transform_floats   */ 16,
+        /* view_manager_ptr_rva            */ 0x015C9408,
+        /* view_manager_render_camera      */ 0x1350,
+        /* view_manager_active_controller  */ 0x28,
+        /* garage_camera_vtable_rva        */ 0x00D42BF0,
+        /* car_paint_camera_vtable_rva     */ 0x00D3E7D0,
+        /* car_camera_vtable_rva           */ 0x00D3E6C0,
+        /* free_camera_vtable_rva          */ 0x00D41808,
+        /* track_side_camera_vtable_rva    */ 0x00D42830,
+        /* animated_camera_vtable_rva      */ 0x00D42BC0,
+        /* photo_mode_camera_vtable_rva    */ 0x00D42C68,
+        /* gameplay_state_ptr_rva          */ 0x015C9418,
+        /* race_phase_offset               */ 0x15D0,
+        /* race_phase_countdown            */ 2,
+        /* race_phase_racing               */ 3,
+        /* countdown_ms_offset             */ 0x1574,
+        /* pause_state_ptr_rva             */ 0x015C90C8,
+        /* pause_state_object              */ 0x70,
+        /* pause_state_paused              */ 0x59,
+        /* net_client_ptr_rva              */ 0x015C9428,
+        /* net_client_state                */ 0x370,
+        /* net_client_session_lo           */ 3,
+        /* net_client_session_hi           */ 6,
+        /* net_server_ptr_rva              */ 0x015C9430,
+        /* net_server_state                */ 0x108,
+    },
+};
+
+
 // Wreckfest 2, Steam app 1203190, Wreckfest2.exe built 2026-10-15 09:45:59 UTC.
 // The patch moved more than code: the view manager grew 0x130 bytes ahead of its
 // embedded cameras, so the render camera sits at +0x1340; GameplayState grew,
