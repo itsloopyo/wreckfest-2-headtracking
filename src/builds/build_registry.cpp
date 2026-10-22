@@ -11,7 +11,6 @@
 #include "builds/runtime_discovery.h"
 #include "logging.h"
 
-using cameraunlock::memory::FingerprintMismatch;
 using cameraunlock::memory::PeFingerprint;
 
 namespace wf2_ht::builds {
@@ -28,26 +27,17 @@ namespace {
 const BuildProfile* g_active = nullptr;
 BuildProfile g_discovered{ "runtime-discovery", {}, {} };
 
-// Says which side of the known builds the running EXE fell on, against the
-// diagnostic primary - the newest profile in the registry, which is why
-// kKnownProfiles is ordered newest first. Only reached when runtime discovery
-// also failed, so it is the whole of what a user sees when the mod cannot run.
-void LogUnknownBuild(const PeFingerprint& running) {
-    const BuildProfile& primary = *kKnownProfiles[0];
-    switch (cameraunlock::memory::ClassifyMismatch(running, primary.Fingerprint)) {
-    case FingerprintMismatch::Newer:
-        Log::Line("[build] this game build is NEWER than any build this mod knows about "
-                  "(newest known: %s). Check the mod's releases page for an update.", primary.Name);
-        break;
-    case FingerprintMismatch::Older:
-        Log::Line("[build] this game build is OLDER than any build this mod knows about "
-                  "(newest known: %s). Let Steam finish updating the game.", primary.Name);
-        break;
-    case FingerprintMismatch::Differs:
-        Log::Line("[build] this EXE carries a known build timestamp but a different image "
-                  "size or checksum, so it is not a build this mod has offsets for.");
-        break;
-    }
+// The whole of what a user sees when the mod cannot run. It names the newest
+// profile for comparison and nothing more: a PE timestamp is not established as
+// a build date for this game, so it says nothing about which build is newer.
+void LogUnknownBuild() {
+#ifdef WF2_DEV_DISCOVERY_ONLY
+    Log::Line("[build] runtime discovery failed and this dev build ignores the measured profiles.");
+#else
+    Log::Line("[build] no measured profile has this fingerprint (newest profile: %s) and runtime discovery "
+              "failed. Check the mod's releases page for a version that supports this game build.",
+              kKnownProfiles[0]->Name);
+#endif
     Log::Line("[build] staying fully dormant: no hooks installed, the game runs vanilla.");
 }
 
@@ -69,7 +59,7 @@ bool ImageIsReadable(const std::uint8_t* base, std::size_t size) {
 bool Discover(void* moduleBase, const PeFingerprint& running, OffsetTable& out) {
     const auto* base = static_cast<const std::uint8_t*>(moduleBase);
     if (!ImageIsReadable(base, running.SizeOfImage)) {
-        Log::Line("[build] runtime discovery: part of the image is not readable, so it was not scanned");
+        Log::Line("[build] runtime discovery failed: part of the image is not readable, so it was not scanned");
         return false;
     }
     std::string failure;
@@ -78,18 +68,30 @@ bool Discover(void* moduleBase, const PeFingerprint& running, OffsetTable& out) 
                                     out, failure);
     const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - t0).count();
-    if (ok) Log::Line("[build] runtime discovery resolved every value in %lld ms", ms);
-    else Log::Line("[build] runtime discovery failed after %lld ms: %s", ms, failure.c_str());
+    if (!ok) {
+        Log::Line("[build] runtime discovery failed after %lld ms: %s", ms, failure.c_str());
+    } else if (failure.empty()) {
+        Log::Line("[build] runtime discovery resolved every value in %lld ms", ms);
+    } else {
+        Log::Line("[build] runtime discovery resolved every required value in %lld ms; the pause chain was "
+                  "not found (%s), so pause is not detected on the discovered route", ms, failure.c_str());
+    }
     return ok;
 }
 
 // A measured profile and the discovered values describe the same build, so any
-// difference is a fault in one of them. The measured profile is what runs, and
-// the difference is logged field by field.
-void CrossCheck(const BuildProfile& profile, const OffsetTable& found) {
+// difference is a fault in one of them, and nothing says which. Each difference
+// is logged and the count returned. A pause chain discovery did not find is a
+// gap, not a difference.
+int CrossCheck(const BuildProfile& profile, const OffsetTable& found) {
+    const bool pause_found = found.pause_state_ptr_rva != 0;
     int differences = 0;
     for (std::size_t i = 0; i < kOffsetFieldCount; ++i) {
         const OffsetField& f = kOffsetFields[i];
+        if (!pause_found && (f.member == &OffsetTable::pause_state_ptr_rva || f.member == &OffsetTable::pause_state_object
+                             || f.member == &OffsetTable::pause_state_paused)) {
+            continue;
+        }
         const unsigned int want = profile.Offsets.*f.member;
         const unsigned int got = found.*f.member;
         if (want == got) continue;
@@ -97,7 +99,11 @@ void CrossCheck(const BuildProfile& profile, const OffsetTable& found) {
         Log::Line("[build] runtime discovery DISAGREES with %s on %s: profile 0x%X, discovered 0x%X",
                   profile.Name, f.name, want, got);
     }
-    if (differences == 0) Log::Line("[build] runtime discovery agrees with %s on every value", profile.Name);
+    if (differences == 0) {
+        Log::Line("[build] runtime discovery agrees with %s on every value%s", profile.Name,
+                  pause_found ? "" : " it resolved");
+    }
+    return differences;
 }
 
 }  // namespace
@@ -137,14 +143,18 @@ ProfileSelection SelectProfile(void* moduleBase) {
             Log::Line("[build] profile %s is a placeholder (offsets not derived yet); staying dormant", p.Name);
             return ProfileSelection::Incomplete;
         }
-        if (discovered) CrossCheck(p, found);
+        if (discovered && CrossCheck(p, found) != 0) {
+            Log::Line("[build] profile %s and runtime discovery disagree, so neither can be trusted.", p.Name);
+            Log::Line("[build] staying fully dormant: no hooks installed, the game runs vanilla.");
+            return ProfileSelection::Inconsistent;
+        }
         g_active = &p;
         Log::Line("[build] activated profile %s", p.Name);
         return ProfileSelection::Matched;
     }
 
     if (!discovered) {
-        LogUnknownBuild(running);
+        LogUnknownBuild();
         return ProfileSelection::NoMatch;
     }
     g_discovered.Fingerprint = running;

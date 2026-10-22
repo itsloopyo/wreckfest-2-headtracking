@@ -27,6 +27,11 @@ struct ImageView {
 // exactly one candidate and pass the checks that tie it to the others. On any
 // failure `out` is left untouched and `failure` names the check that failed.
 //
+// The pause chain is optional, as it is in a measured profile: when it alone
+// cannot be resolved the call still succeeds, with the three pause fields zero
+// and `failure` naming the pause check that failed. On full success `failure`
+// is empty.
+//
 // Scans the whole of .text once. Call it once, at startup, off the loader lock.
 bool DiscoverOffsets(const ImageView& image, OffsetTable& out, std::string& failure);
 

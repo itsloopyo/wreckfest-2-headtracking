@@ -23,6 +23,10 @@ struct Insn {
     std::uint8_t opcode2 = 0;
     bool vex = false;
     bool rex_w = false;
+    // REX.B, which extends the register in the opcode byte itself (B8+r, 58+r).
+    bool rex_b = false;
+    // A 66 prefix: a dword opcode that is operating on a word.
+    bool opsize16 = false;
 
     bool has_modrm = false;
     std::uint8_t mod = 0;

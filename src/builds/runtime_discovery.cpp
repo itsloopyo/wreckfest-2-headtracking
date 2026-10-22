@@ -138,7 +138,6 @@ public:
     bool Has(std::uint64_t rva, std::uint64_t len) const { return rva + len <= v_.size && rva + len >= rva; }
     std::uint16_t U16(std::uint32_t rva) const { std::uint16_t x; std::memcpy(&x, v_.base + rva, 2); return x; }
     std::uint32_t U32(std::uint32_t rva) const { std::uint32_t x; std::memcpy(&x, v_.base + rva, 4); return x; }
-    std::uint64_t U64(std::uint32_t rva) const { std::uint64_t x; std::memcpy(&x, v_.base + rva, 8); return x; }
     std::uint8_t U8(std::uint32_t rva) const { return v_.base[rva]; }
     const std::uint8_t* At(std::uint32_t rva) const { return v_.base + rva; }
     std::uint64_t PointerBase() const { return v_.pointer_base; }
@@ -204,9 +203,17 @@ public:
         }
         std::sort(rel_.begin(), rel_.end());
         std::sort(rip_.begin(), rip_.end());
+
+        const Section& t = img_.Text();
+        for (std::uint32_t at = t.rva; at + 5 <= t.rva + t.size; ++at) {
+            const std::uint8_t op = img_.U8(at);
+            if (op != 0xE8 && op != 0xE9) continue;
+            const auto rel = static_cast<std::int32_t>(img_.U32(at + 1));
+            raw_rel_.push_back(static_cast<std::uint32_t>(static_cast<std::int64_t>(at) + 5 + rel));
+        }
+        std::sort(raw_rel_.begin(), raw_rel_.end());
         return true;
     }
-
 
     const Chunk* ChunkAt(std::uint32_t rva) const {
         auto it = std::upper_bound(chunks_.begin(), chunks_.end(), rva,
@@ -227,6 +234,16 @@ public:
     // Every rel32 call or jump landing on `target`.
     std::vector<Ref> RelTo(std::uint32_t target) const { return Range(rel_, target); }
     std::vector<Ref> RipTo(std::uint32_t target) const { return Range(rip_, target); }
+
+    // E8 / E9 rel32 byte patterns anywhere in .text that land on `target`. A
+    // chunk's decode stops at the first instruction the decoder cannot length
+    // (EVEX), or at a jump table the compiler placed inside it, so a call after
+    // either is missing from RelTo. Every decoded reference is also one of
+    // these, so a larger count here means RelTo cannot vouch for a count.
+    std::size_t RawRelCount(std::uint32_t target) const {
+        const auto [lo, hi] = std::equal_range(raw_rel_.begin(), raw_rel_.end(), target);
+        return static_cast<std::size_t>(hi - lo);
+    }
 
     // All of a function's chunks decoded in address order.
     const Insns& Function(std::uint32_t primary) const {
@@ -250,7 +267,7 @@ public:
     }
 
     // A function with no unwind data - a leaf that touches no stack - decoded
-    // up to its first return or unconditional jump.
+    // up to its first ret or direct jmp, or max_insns.
     Insns Leaf(std::uint32_t rva, std::size_t max_insns = 16) const {
         Insns out;
         const Section& t = img_.Text();
@@ -304,6 +321,7 @@ private:
     std::multimap<std::uint32_t, std::size_t> by_primary_;
     std::vector<Ref> rel_;
     std::vector<Ref> rip_;
+    std::vector<std::uint32_t> raw_rel_;
     mutable std::unordered_map<std::uint32_t, Insns> fn_cache_;
 };
 
@@ -322,8 +340,18 @@ int RegRegDst(const Insn& in) {
     if (in.opcode == 0x89) return in.rm;
     return Insn::kNone;
 }
-bool IsMovDwordImm(const Insn& in) { return in.opcode == 0xC7 && !in.rex_w && in.reg == 0 && in.HasMemory() && in.has_imm; }
-bool IsCmpDwordImm8(const Insn& in) { return in.opcode == 0x83 && !in.rex_w && in.reg == 7 && in.HasMemory() && in.has_imm; }
+bool IsMovDwordImm(const Insn& in) { return in.opcode == 0xC7 && !in.rex_w && !in.opsize16 && in.reg == 0 && in.HasMemory() && in.has_imm; }
+bool IsCmpDwordImm8(const Insn& in) { return in.opcode == 0x83 && !in.rex_w && !in.opsize16 && in.reg == 7 && in.HasMemory() && in.has_imm; }
+// mov ecx, imm32
+bool IsMovEcxImm(const Insn& in) { return in.opcode == 0xB9 && !in.rex_w && !in.rex_b && !in.opsize16 && in.has_imm; }
+// Whether `in` leaves `reg` holding something else: a call, or a load, lea,
+// xor, immediate or register move into it.
+bool Clobbers(const Insn& in, int reg) {
+    if (in.opcode == 0xE8) return true;
+    if ((in.opcode == 0x8B || in.opcode == 0x8D || in.opcode == 0x33) && in.has_modrm && in.reg == reg) return true;
+    if ((in.opcode & 0xF8) == 0xB8 && ((in.opcode & 7) | (in.rex_b ? 8 : 0)) == reg) return true;
+    return RegRegDst(in) == reg;
+}
 bool IsRet(const Insn& in) { return in.opcode == 0xC3; }
 
 // mov rax, [rip + static] ; ret
@@ -337,7 +365,7 @@ bool LeafLoadsStatic(const Insns& leaf, std::uint32_t& static_rva) {
 bool LeafReadsField(const Insns& leaf, bool qword, std::uint32_t& field) {
     if (leaf.size() != 2 || !IsRet(leaf[1])) return false;
     const Insn& m = leaf[0];
-    if (m.opcode != 0x8B || m.rex_w != qword || m.reg != kRax || !m.IsMem(kRcx) || m.disp <= 0) return false;
+    if (m.opcode != 0x8B || m.rex_w != qword || m.opsize16 || m.reg != kRax || !m.IsMem(kRcx) || m.disp <= 0) return false;
     field = static_cast<std::uint32_t>(m.disp);
     return true;
 }
@@ -354,7 +382,17 @@ struct Discovery {
     std::map<std::uint32_t, std::uint32_t> controller_offsets;  // vtable -> offset in the view manager
     std::uint32_t gameplay_state_size = 0;
 
-    // ---- RTTI -------------------------------------------------------------
+    // The rel32 references to `target`, refused when the raw bytes of .text
+    // hold more of them than were decoded.
+    bool CallsTo(std::uint32_t target, const char* what, std::vector<Ref>& out) {
+        out = an.RelTo(target);
+        const std::size_t raw = an.RawRelCount(target);
+        if (raw != out.size()) {
+            return fail("%s: %zu rel32 references to 0x%X in .text but %zu decoded", what, raw, target, out.size());
+        }
+        return true;
+    }
+
     bool Vtable(const char* mangled, unsigned int& out) {
         const std::size_t n = std::strlen(mangled) + 1;
         std::vector<std::uint32_t> names = img.Find(img.Data(), mangled, n);
@@ -385,7 +423,6 @@ struct Discovery {
             && Vtable(".?AVPhotoModeCamera@romu@@", t.photo_mode_camera_vtable_rva);
     }
 
-    // ---- BCORE::Camera constructor -----------------------------------------
     // The one function that stores the near, far and field-of-view seeds as
     // three consecutive floats through the same register.
     bool CameraCtor() {
@@ -410,13 +447,14 @@ struct Discovery {
         return true;
     }
 
-    // ---- View manager constructor and the render camera --------------------
     // The view manager embeds four cameras back to back; the only function that
     // constructs four cameras at an even stride off one register is its
     // constructor, and the first of them is the one it renders through.
     bool RenderCamera() {
+        std::vector<Ref> calls;
+        if (!CallsTo(camera_ctor, "camera constructor", calls)) return false;
         std::map<std::pair<std::uint32_t, int>, std::vector<std::uint32_t>> groups;
-        for (const Ref& r : an.RelTo(camera_ctor)) {
+        for (const Ref& r : calls) {
             const std::uint32_t fn = an.PrimaryOf(r.site);
             if (fn == 0) continue;
             const Insns& body = an.Function(fn);
@@ -442,7 +480,6 @@ struct Discovery {
         return true;
     }
 
-    // ---- The two hook targets and the view manager static ------------------
     // ViewManager::Update ends by restoring its saved registers and tail-jumping
     // to Camera::UpdateViewMatrix with rcx pointing at the render camera.
     static bool IsEpilogue(const Insn& in) {
@@ -480,19 +517,26 @@ struct Discovery {
 
         const std::uint32_t vmx = tails[0].target;
         if (!an.IsFunctionStart(vmx)) return fail("view matrix: tail jump target 0x%X is not a function entry", vmx);
-        const std::vector<Ref> vmx_refs = an.RelTo(vmx);
+        std::vector<Ref> vmx_refs;
+        if (!CallsTo(vmx, "view matrix", vmx_refs)) return false;
         if (vmx_refs.size() != 1) return fail("view matrix: expected the tail jump to be its only caller, found %zu", vmx_refs.size());
 
         // Camera::UpdateViewMatrix keeps `this` in a callee-saved register and
         // inverts the camera-to-world transform into the view matrix:
         //   lea rdx, [this + transform] ; lea rcx, [this + view] ; call invert
+        // `this` is copied out of rcx in the entry chunk before the first call
+        // or branch, while rcx still holds it.
         const Insns& vbody = an.Function(vmx);
-        int self = Insn::kNone;
+        const Chunk* entry = an.ChunkAt(vmx);
+        std::set<int> selves;
         for (const Insn& in : vbody) {
+            if (in.rva < entry->begin) continue;
+            if (in.rva >= entry->end || in.relative) break;
             const int dst = RegRegDst(in);
-            if (dst != Insn::kNone && IsMovRegReg(in, dst, kRcx)) { self = dst; break; }
+            if (dst != Insn::kNone && IsMovRegReg(in, dst, kRcx)) selves.insert(dst);
         }
-        if (self == Insn::kNone) return fail("view matrix: no copy of the camera pointer in 0x%X", vmx);
+        if (selves.size() != 1) return fail("view matrix: expected one copy of the camera pointer at the top of 0x%X, found %zu", vmx, selves.size());
+        const int self = *selves.begin();
         std::vector<std::uint32_t> transforms;
         for (std::size_t i = 0; i + 2 < vbody.size(); ++i) {
             const Insn& a = vbody[i];
@@ -506,7 +550,8 @@ struct Discovery {
 
         const std::uint32_t update = an.PrimaryOf(tails[0].jmp);
         if (update == 0 || !an.IsFunctionStart(update)) return fail("view manager update: the tail jump is not inside a function");
-        const std::vector<Ref> callers = an.RelTo(update);
+        std::vector<Ref> callers;
+        if (!CallsTo(update, "view manager update", callers)) return false;
         if (callers.size() != 1) return fail("view manager update: expected one caller, found %zu", callers.size());
         const std::uint32_t caller_fn = an.PrimaryOf(callers[0].site);
         if (caller_fn == 0) return fail("view manager update: its caller has no unwind data");
@@ -533,7 +578,6 @@ struct Discovery {
         return true;
     }
 
-    // ---- Active camera controller field -----------------------------------
     // The view manager constructor runs each controller's constructor on an
     // inline sub-object; a constructor is recognised by the controller vtable
     // it stores. SetCameraType then points one field at whichever sub-object
@@ -549,7 +593,11 @@ struct Discovery {
             if (!IsLea(lea, kRcx) || !lea.IsMem(vm_ctor_base) || lea.disp <= 0) continue;
             for (const Insn& in : an.Body(ctor[i].target)) {
                 if (in.opcode == 0x8D && in.IsRipRelative() && vtables.count(in.RipTarget())) {
-                    controller_offsets[in.RipTarget()] = static_cast<std::uint32_t>(lea.disp);
+                    const auto [it, added] = controller_offsets.emplace(in.RipTarget(), static_cast<std::uint32_t>(lea.disp));
+                    if (!added && it->second != static_cast<std::uint32_t>(lea.disp)) {
+                        return fail("view manager: controller vtable 0x%X constructed at both +0x%X and +0x%X",
+                                    in.RipTarget(), it->second, static_cast<std::uint32_t>(lea.disp));
+                    }
                     break;
                 }
             }
@@ -583,7 +631,6 @@ struct Discovery {
         return true;
     }
 
-    // ---- Singletons --------------------------------------------------------
     // The functions that store `vtable` into a new object, and the statics
     // their callers store the result into. `size` gets the allocation each
     // caller makes for it, when it asks for one.
@@ -595,7 +642,9 @@ struct Discovery {
             if (fn != 0) ctors.insert(fn);
         }
         for (std::uint32_t ctor : ctors) {
-            for (const Ref& c : an.RelTo(ctor)) {
+            std::vector<Ref> calls;
+            if (!CallsTo(ctor, what, calls)) return false;
+            for (const Ref& c : calls) {
                 const std::uint32_t fn = an.PrimaryOf(c.site);
                 if (fn == 0) continue;
                 const Insns& body = an.Function(fn);
@@ -617,10 +666,15 @@ struct Discovery {
                     }
                     ++j;
                 }
+                // The allocation: mov ecx, size directly ahead of the allocator
+                // call, a few instructions before the constructor call (the
+                // engine zeroes the block with a second call in between).
                 if (size != nullptr) {
                     for (std::size_t k = i; k-- > 0 && i - k <= 16;) {
-                        const Insn& in = body[k];
-                        if (in.opcode == 0xB9 && in.has_imm && !in.rex_w) { sizes.insert(static_cast<std::uint32_t>(in.imm)); break; }
+                        if (IsMovEcxImm(body[k]) && k + 1 < i && IsCall(body[k + 1])) {
+                            sizes.insert(static_cast<std::uint32_t>(body[k].imm));
+                            break;
+                        }
                     }
                 }
             }
@@ -644,7 +698,6 @@ struct Discovery {
         return true;
     }
 
-    // ---- Race phase and countdown ------------------------------------------
     // The countdown tick:
     //   cmp dword [this+countdown], 0 ; jl done
     //   cmp dword [this+phase], N ; ... jne
@@ -656,7 +709,7 @@ struct Discovery {
         for (std::uint32_t hit : img.Find(img.Text(), kSetterHead, 2)) {
             if (img.Text().Contains(hit, 7) && img.U8(hit + 6) == 0xC3) setters.insert(hit);
         }
-        struct Tick { std::uint32_t phase, countdown, from, to; };
+        struct Tick { std::uint32_t setter, phase, countdown, from, to; };
         std::vector<Tick> ticks;
         for (std::uint32_t s : setters) {
             for (const Ref& c : an.RelTo(s)) {
@@ -682,12 +735,14 @@ struct Discovery {
                 if (!is_jl || !IsCmpDwordImm8(cmp_cd) || !cmp_cd.IsMem(write.base) || cmp_cd.imm != 0 || cmp_cd.disp <= 0) continue;
                 const std::int64_t from = body[cmp_phase].imm;
                 if (from <= 0 || write.imm != from + 1) continue;
-                ticks.push_back({ static_cast<std::uint32_t>(write.disp), static_cast<std::uint32_t>(cmp_cd.disp),
+                ticks.push_back({ s, static_cast<std::uint32_t>(write.disp), static_cast<std::uint32_t>(cmp_cd.disp),
                                   static_cast<std::uint32_t>(from), static_cast<std::uint32_t>(write.imm) });
             }
         }
         if (ticks.size() != 1) return fail("race phase: expected one countdown tick, found %zu", ticks.size());
         const Tick& tk = ticks[0];
+        std::vector<Ref> setter_calls;
+        if (!CallsTo(tk.setter, "race phase setter", setter_calls)) return false;
         if (tk.phase + 4 > gameplay_state_size || tk.countdown + 4 > gameplay_state_size) {
             return fail("race phase: +0x%X / +0x%X do not fit a GameplayState of 0x%X bytes", tk.phase, tk.countdown, gameplay_state_size);
         }
@@ -703,6 +758,7 @@ struct Discovery {
             const int reg = body[i].reg;
             for (std::size_t k = i + 1; k < body.size() && k <= i + 8; ++k) {
                 if (body[k].IsMem(reg) && body[k].disp == static_cast<std::int64_t>(tk.phase)) { owned = true; break; }
+                if (Clobbers(body[k], reg)) break;
             }
         }
         if (!owned) return fail("race phase: nothing reads +0x%X through the GameplayState static", tk.phase);
@@ -713,7 +769,6 @@ struct Discovery {
         return true;
     }
 
-    // ---- Pause -------------------------------------------------------------
     // SetPaused, the one function naming both GameState_PauseEnter and
     // GameState_PauseExit, opens with
     //   call get_owner ; mov rcx, rax ; ... ; call get_state
@@ -744,12 +799,19 @@ struct Discovery {
         if (!LeafReadsField(an.Leaf(body[c1].target), true, object)) return fail("pause: the second call is not a member getter");
         if (!img.Data().Contains(st, 8)) return fail("pause: the static is not in .data");
 
+        // Only accesses through rax while it still holds what the state getter
+        // returned count.
+        const std::uint32_t state_getter = body[c1].target;
         std::set<std::uint32_t> cmp_flag, mov_flag;
-        for (std::size_t i = c1 + 1; i < body.size(); ++i) {
+        bool rax_is_state = false;
+        for (std::size_t i = c1; i < body.size(); ++i) {
             const Insn& in = body[i];
-            if (!in.IsMem(kRax) || in.disp < 0) continue;
-            if (in.opcode == 0x38) cmp_flag.insert(static_cast<std::uint32_t>(in.disp));
-            if (in.opcode == 0x88) mov_flag.insert(static_cast<std::uint32_t>(in.disp));
+            if (IsCall(in)) { rax_is_state = in.target == state_getter; continue; }
+            if (rax_is_state && in.IsMem(kRax) && in.disp >= 0) {
+                if (in.opcode == 0x38) cmp_flag.insert(static_cast<std::uint32_t>(in.disp));
+                if (in.opcode == 0x88) mov_flag.insert(static_cast<std::uint32_t>(in.disp));
+            }
+            if (Clobbers(in, kRax)) rax_is_state = false;
         }
         if (cmp_flag.size() != 1 || mov_flag != cmp_flag) return fail("pause: expected one byte compared and written, found %zu / %zu", cmp_flag.size(), mov_flag.size());
         t.pause_state_ptr_rva = st;
@@ -758,7 +820,6 @@ struct Discovery {
         return true;
     }
 
-    // ---- Network -----------------------------------------------------------
     // Every place that loads the singleton into rcx and calls a getter leaf
     // `mov eax, [rcx+state] ; ret`.
     struct Getter { std::uint32_t field; std::size_t index; const Insns* body; };
@@ -831,11 +892,15 @@ bool DiscoverOffsets(const ImageView& view, OffsetTable& out, std::string& failu
 
     Discovery d{ img, an, fail };
     if (!d.Vtables() || !d.CameraCtor() || !d.RenderCamera() || !d.HookTargets() || !d.ActiveController()
-        || !d.GameplayState() || !d.RacePhase() || !d.Pause() || !d.Network()) {
+        || !d.GameplayState() || !d.RacePhase()) {
         return false;
     }
+    std::string pause_failure;
+    if (!d.Pause()) pause_failure = failure;
+    if (!d.Network()) return false;
     if (!IsProfileComplete(BuildProfile{ "discovered", {}, d.t })) return fail("discovery: a required value resolved to zero");
     out = d.t;
+    failure = pause_failure;
     return true;
 }
 

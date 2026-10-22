@@ -116,7 +116,8 @@ bool DecodeLegacyMaps(const std::uint8_t* p, std::size_t avail, std::uint32_t rv
     bool rep = false;
     while (i < avail && i < 4) {
         const std::uint8_t b = p[i];
-        if (b == 0x66 || b == 0xF2 || b == 0x2E || b == 0x3E || b == 0x26 || b == 0x36
+        if (b == 0x66) { out.opsize16 = true; ++i; continue; }
+        if (b == 0xF2 || b == 0x2E || b == 0x3E || b == 0x26 || b == 0x36
             || b == 0x64 || b == 0x65 || b == 0x67 || b == 0xF0) { ++i; continue; }
         if (b == 0xF3) { rep = true; ++i; continue; }
         break;
@@ -127,6 +128,7 @@ bool DecodeLegacyMaps(const std::uint8_t* p, std::size_t avail, std::uint32_t rv
     const std::uint8_t op = p[i + 1];
     bool imm8 = false;
     if (op == 0x38 || op == 0x3A) {
+        handled = true;
         if (i + 3 > avail) return false;
         imm8 = op == 0x3A;
         out.opcode2 = p[i + 2];
@@ -140,6 +142,7 @@ bool DecodeLegacyMaps(const std::uint8_t* p, std::size_t avail, std::uint32_t rv
     handled = true;
     out.opcode = 0x0F;
     out.rex_w = (rex & 8) != 0;
+    out.rex_b = (rex & 1) != 0;
     const std::size_t n = DecodeModrm(p + i, avail - i, rex & 4, rex & 2, rex & 1, out);
     if (n == 0) return false;
     i += n;
@@ -189,6 +192,8 @@ bool DecodeInsn(const std::uint8_t* code, std::size_t avail, std::uint32_t rva, 
     out.opcode = hs.opcode;
     out.opcode2 = hs.opcode == 0x0F ? hs.opcode2 : 0;
     out.rex_w = hs.rex_w != 0;
+    out.rex_b = hs.rex_b != 0;
+    out.opsize16 = hs.p_66 != 0;
 
     if (hs.flags & F_MODRM) {
         out.has_modrm = true;

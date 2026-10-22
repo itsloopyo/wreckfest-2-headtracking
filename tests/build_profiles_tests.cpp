@@ -5,7 +5,7 @@
 // the latest game patch, and its rules are policy rather than anything the
 // compiler can check: profiles are append-only, an existing profile's RVAs are
 // never edited in place, and the newest one sits at the top because that is the
-// entry the "unknown build" diagnostic compares against.
+// entry the "unknown build" log line names.
 //
 // Where the expected values come from matters, because a number copied out of
 // steam_offsets.cpp would agree with any edit to steam_offsets.cpp - including
@@ -32,6 +32,7 @@ using wf_test::Check;
 namespace {
 
 void CheckOffset(unsigned int actual, unsigned int expected, const char* what) {
+    ++wf_test::g_checks;
     if (actual == expected) {
         std::printf("  ok:   %s\n", what);
         return;
@@ -191,10 +192,9 @@ void TheRegistryTest() {
         Check(kKnownProfiles[i] != nullptr, "every entry points at a profile");
     }
 
-    // Newest first: LogUnknownBuild compares the running EXE against
-    // kKnownProfiles[0] to say whether the user is ahead of the mod or behind
-    // it, so an out-of-order registry tells them to do the opposite of the
-    // right thing.
+    // Newest first, so the unknown-build log line names the newest profile. The
+    // three measured builds were released in the order of their TimeDateStamps,
+    // which is what lets this check use them.
     for (std::size_t i = 1; i < kKnownProfileCount; ++i) {
         Check(kKnownProfiles[i - 1]->Fingerprint.TimeDateStamp
                   > kKnownProfiles[i]->Fingerprint.TimeDateStamp,

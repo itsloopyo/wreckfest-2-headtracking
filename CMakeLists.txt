@@ -60,6 +60,11 @@ add_library(Wreckfest2HeadTracking SHARED ${MOD_SOURCES})
 # one still exercises the runtime discovery route. Never on for a release.
 option(WF2_DEV_DISCOVERY_ONLY "Dev build: ignore measured build profiles" OFF)
 if(WF2_DEV_DISCOVERY_ONLY)
+    # The option is cached, and `pixi run setup` reuses a configured build/, so
+    # a dev configure there would reach every later package.
+    if(NOT CMAKE_BINARY_DIR MATCHES "/\\.lab/")
+        message(FATAL_ERROR "WF2_DEV_DISCOVERY_ONLY is for a build tree under .lab/, not ${CMAKE_BINARY_DIR}")
+    endif()
     target_compile_definitions(Wreckfest2HeadTracking PRIVATE WF2_DEV_DISCOVERY_ONLY)
 endif()
 
@@ -154,7 +159,7 @@ if(WF2_BUILD_TESTS)
     # The per-build offset registry. Append-only is a policy the compiler cannot
     # enforce, so the shipped profile's fingerprint and every offset the render
     # path uses are pinned here against .lab/NOTES.md, along with the newest-
-    # first ordering the "unknown build" diagnostic depends on.
+    # first ordering the "unknown build" log line relies on to name the newest.
     wf2_add_test(build_profiles ${WF2_REGISTRY_SOURCES})
     target_link_libraries(wf2_build_profiles_tests PRIVATE cameraunlock minhook)
 
@@ -162,6 +167,10 @@ if(WF2_BUILD_TESTS)
     # Wreckfest2.exe named in WF2_GAME_EXES checked against its measured profile.
     wf2_add_test(runtime_discovery ${WF2_REGISTRY_SOURCES})
     target_link_libraries(wf2_runtime_discovery_tests PRIVATE cameraunlock minhook)
+
+    # The decoder discovery runs on, against hand-encoded instructions.
+    wf2_add_test(x64_decode src/builds/x64_decode.cpp)
+    target_link_libraries(wf2_x64_decode_tests PRIVATE minhook)
 
     # Where a centred window starts. The rest of the centring is Win32 calls
     # that need a desktop and a running game; the arithmetic that decides the

@@ -28,7 +28,12 @@ enum Reg { RAX = 0, RCX = 1, RDX = 2, RBX = 3, RSP = 4, RBP = 5, RSI = 6, RDI = 
 
 struct Layout {
     std::uint32_t pad = 0;  // bytes of filler between functions, to move every RVA
+    std::uint32_t rdata_pad = 0;  // bytes ahead of the first RTTI record, to move every vtable
     bool reverse_order = false;
+
+    // The header fingerprint. The defaults are carried by no measured profile.
+    std::uint32_t time_date_stamp = 0x12345678;
+    std::uint32_t image_size = 0x1F000;
 
     std::uint32_t camera_near = 0x78;  // far and fov follow at +4 and +8
     std::uint32_t render_camera = 0x1350;
@@ -71,6 +76,23 @@ struct Faults {
     bool no_gameplay_reader = false;
     bool undersized_gameplay_state = false;
     bool second_gameplay_static = false;
+
+    // Each a second copy of one structure a step requires to be unique.
+    bool duplicate_vtable = false;          // CarCamera's RTTI and vtable twice
+    bool second_camera_ctor = false;
+    bool second_countdown_tick = false;
+    bool second_pause_function = false;
+    bool second_range_check = false;        // with a different session range
+    bool second_server_field = false;
+    bool second_active_field = false;       // a second field pointed at every controller
+    bool controller_twice = false;          // one controller constructed at two offsets
+    // A second call to the view manager update placed after an EVEX
+    // instruction, where the decode of its function stops.
+    bool hidden_update_caller = false;
+
+    // Shapes that resolve, but that a looser match would get wrong.
+    bool r9d_before_ctor = false;           // mov r9d, imm between the allocation and the ctor
+    bool pause_rax_reused = false;          // rax reloaded in SetPaused and another byte compared through it
 };
 
 class Fixture {
@@ -79,7 +101,6 @@ public:
     static constexpr std::uint32_t kRdata = 0x11000, kRdataSize = 0x8000;
     static constexpr std::uint32_t kData = 0x19000, kDataSize = 0x4000;
     static constexpr std::uint32_t kPdata = 0x1D000, kPdataSize = 0x2000;
-    static constexpr std::uint32_t kImageSize = 0x1F000;
 
     std::vector<std::uint8_t> image;
     wf2_ht::builds::OffsetTable expected{};
@@ -88,7 +109,7 @@ public:
     // as the loader leaves them in a running module; otherwise against the
     // header's ImageBase, as they sit in the file.
     Fixture(const Layout& l, const Faults& f, bool in_place) : L(l), F(f) {
-        image.assign(kImageSize, 0);
+        image.assign(l.image_size, 0);
         pointer_base_ = in_place ? reinterpret_cast<std::uintptr_t>(image.data()) : kImageBase;
         Headers();
         Build();
@@ -120,12 +141,12 @@ private:
         W32(0x80, 0x00004550);
         W16(0x84, 0x8664);
         W16(0x86, 4);                // sections
-        W32(0x88, 0x12345678);       // TimeDateStamp no profile carries
+        W32(0x88, L.time_date_stamp);
         W16(0x94, 0xF0);             // optional header size
         const std::uint32_t opt = 0x98;
         W16(opt, 0x20B);
         W64(opt + 0x18, kImageBase);
-        W32(opt + 0x38, kImageSize);
+        W32(opt + 0x38, L.image_size);
         W32(opt + 0x3C, 0x400);
         W32(opt + 0x6C, 16);         // NumberOfRvaAndSizes
         const std::uint32_t sec = opt + 0xF0;
@@ -242,10 +263,12 @@ inline void Fixture::Build() {
     const char* controllers[] = { "GarageCamera", "CarPaintCamera", "CarCamera", "FreeCamera",
                                   "TrackSideCamera", "AnimatedCamera", "PhotoModeCamera" };
     std::uint32_t vt[7] = {};
+    rdata_at_ += L.rdata_pad;
     for (int i = 0; i < 7; ++i) {
         if (i == 6 && F.no_photo_mode_rtti) continue;
         vt[i] = RttiVtable(controllers[i]);
     }
+    if (F.duplicate_vtable) RttiVtable(controllers[2]);
     const std::uint32_t gs_vt = RttiVtable("GameplayState");
     const std::uint32_t client_vt = RttiVtable("NetClient");
     const std::uint32_t server_vt = RttiVtable("NetServer");
@@ -266,12 +289,14 @@ inline void Fixture::Build() {
     std::vector<std::function<void()>> emit;
 
     emit.push_back([&] {
-        Begin("camera_ctor");
-        MovDwordImm(RCX, L.camera_near, 0x3DCCCCCD);
-        MovDwordImm(RCX, L.camera_near + 4, 0x447A0000);
-        MovDwordImm(RCX, L.camera_near + 8, 0x3F832BF5);
-        Ret();
-        End();
+        for (int copy = 0; copy < (F.second_camera_ctor ? 2 : 1); ++copy) {
+            Begin(copy == 0 ? "camera_ctor" : "camera_ctor_twin");
+            MovDwordImm(RCX, L.camera_near, 0x3DCCCCCD);
+            MovDwordImm(RCX, L.camera_near + 4, 0x447A0000);
+            MovDwordImm(RCX, L.camera_near + 8, 0x3F832BF5);
+            Ret();
+            End();
+        }
         // A decoy: the same field of view seeded without the clip planes.
         Begin("decoy_fov");
         MovDwordImm(RCX, 0x200, 0x3F832BF5);
@@ -298,6 +323,10 @@ inline void Fixture::Build() {
             LeaMem(RCX, RBX, L.controller_base + i * 0x100);
             Call("ctl_ctor_" + std::to_string(i));
         }
+        if (F.controller_twice) {
+            LeaMem(RCX, RBX, L.controller_base + 7 * 0x100);
+            Call("ctl_ctor_0");
+        }
         for (int k = 0; k < (F.three_cameras ? 3 : 4); ++k) {
             LeaMem(RCX, RBX, L.render_camera + k * L.camera_stride);
             Call("camera_ctor");
@@ -313,6 +342,10 @@ inline void Fixture::Build() {
             if (vt[i] == 0) continue;
             LeaMem(RAX, RDI, L.controller_base + i * 0x100);
             MovMemReg(RDI, L.active_controller, RAX);
+            if (F.second_active_field) {
+                LeaMem(RAX, RDI, L.controller_base + i * 0x100);
+                MovMemReg(RDI, L.active_controller + 8, RAX);
+            }
         }
         Ret();
         End();
@@ -360,6 +393,11 @@ inline void Fixture::Build() {
             MovRegRip(RCX, vm_static);
             Call("vm_update");
         }
+        if (F.hidden_update_caller) {
+            B({ 0x62, 0xF1, 0xFD, 0x48, 0x40, 0xC1 });     // vpmullq zmm0, zmm0, zmm1 (EVEX)
+            MovRegRip(RCX, vm_static);
+            Call("vm_update");
+        }
         AddRsp(0x28);
         Ret();
         End();
@@ -375,6 +413,7 @@ inline void Fixture::Build() {
         B({ 0xB9 }); D32(size);                            // mov ecx, size
         Call("alloc");
         MovRegReg(RCX, RAX);
+        if (F.r9d_before_ctor) { B({ 0x41, 0xB9 }); D32(0x10); }  // mov r9d, 0x10
         Call(n + "_ctor");
         B({ 0xEB, 0x03 });                                 // jmp over the null path
         B({ 0x49, 0x8B, 0xC6 });                           // mov rax, r14
@@ -408,22 +447,24 @@ inline void Fixture::Build() {
         BeginLeaf("race_started");
         B({ 0x88, 0x0D }); RipTo(race_flag, 0);            // mov [rip+flag], cl
         Ret();
-        Begin("countdown_tick");
-        Push(RSI);
-        SubRsp(0x20);
-        MovRegReg(RSI, RCX);
-        CmpDwordImm8(RSI, L.countdown, 0);
-        B({ 0x0F, 0x8C }); D32(26);                         // jl done
-        CmpDwordImm8(RSI, L.race_phase, static_cast<std::uint8_t>(L.phase_countdown));
-        const std::uint32_t split = Here() - fn_start_;
-        B({ 0x75, 0x11 });                                  // jne done
-        B({ 0xB1, 0x01 });                                  // mov cl, 1
-        MovDwordImm(RSI, L.race_phase, L.phase_countdown + 1);
-        Call("race_started");
-        AddRsp(0x20);
-        Pop(RSI);
-        Ret();
-        End(split);
+        for (int copy = 0; copy < (F.second_countdown_tick ? 2 : 1); ++copy) {
+            Begin(copy == 0 ? "countdown_tick" : "countdown_tick_twin");
+            Push(RSI);
+            SubRsp(0x20);
+            MovRegReg(RSI, RCX);
+            CmpDwordImm8(RSI, L.countdown + copy * 8, 0);
+            B({ 0x0F, 0x8C }); D32(26);                     // jl done
+            CmpDwordImm8(RSI, L.race_phase, static_cast<std::uint8_t>(L.phase_countdown));
+            const std::uint32_t split = Here() - fn_start_;
+            B({ 0x75, 0x11 });                              // jne done
+            B({ 0xB1, 0x01 });                              // mov cl, 1
+            MovDwordImm(RSI, L.race_phase, L.phase_countdown + 1);
+            Call("race_started");
+            AddRsp(0x20);
+            Pop(RSI);
+            Ret();
+            End(split);
+        }
         if (!F.no_gameplay_reader) {
             Begin("read_phase");
             MovRegRip(RAX, gs_static);
@@ -452,6 +493,10 @@ inline void Fixture::Build() {
         MovRegReg(RCX, RBX);
         Call("pause_state");
         B({ 0x40, 0x88, 0x78, L.pause_flag });             // mov [rax+flag], dil
+        if (F.pause_rax_reused) {
+            MovRegRip(RAX, pause_static);
+            B({ 0x40, 0x38, 0x78, static_cast<std::uint8_t>(L.pause_flag + 1) });  // cmp [rax+other], dil
+        }
         LeaRip(RDX, exit_str);
         LeaRip(RAX, enter_str);
         AddRsp(0x20);
@@ -459,6 +504,13 @@ inline void Fixture::Build() {
         Pop(RBX);
         Ret();
         End();
+        if (F.second_pause_function) {
+            Begin("pause_twin");
+            LeaRip(RDX, exit_str);
+            LeaRip(RAX, enter_str);
+            Ret();
+            End();
+        }
     });
     emit.push_back([&] {
         BeginLeaf("client_state");
@@ -506,6 +558,29 @@ inline void Fixture::Build() {
         AddRsp(0x28);
         Ret();
         End();
+        if (F.second_range_check) {
+            Begin("in_session_twin");
+            SubRsp(0x28);
+            MovRegRip(RCX, client_static);
+            Call("client_state");
+            B({ 0x83, 0xC0, static_cast<std::uint8_t>(-static_cast<int>(L.session_lo + 1)) });
+            B({ 0x83, 0xF8, L.session_span });
+            AddRsp(0x28);
+            Ret();
+            End();
+        }
+        if (F.second_server_field) {
+            BeginLeaf("server_other");
+            B({ 0x8B, 0x81 }); D32(L.server_state + 8);
+            Ret();
+            Begin("server_other_user");
+            SubRsp(0x28);
+            MovRegRip(RCX, server_static);
+            Call("server_other");
+            AddRsp(0x28);
+            Ret();
+            End();
+        }
     });
 
     if (L.reverse_order) std::reverse(emit.begin(), emit.end());
