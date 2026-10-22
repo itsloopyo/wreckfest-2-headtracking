@@ -69,6 +69,7 @@ Matrix Applied(const float src[kCameraTransformFloats], const HeadPose& pose) {
 
 void CheckMatrixClose(const Matrix& actual, const float expected[kCameraTransformFloats],
                       const char* what) {
+    ++wf_test::g_checks;
     for (int i = 0; i < static_cast<int>(kCameraTransformFloats); ++i) {
         if (std::fabs(actual.m[i] - expected[i]) > wf_test::kEpsilon) {
             std::printf("  FAIL: %s (element %d: expected %.6f, got %.6f)\n",

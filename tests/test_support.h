@@ -12,12 +12,14 @@
 
 namespace wf_test {
 
+inline int g_checks = 0;
 inline int g_failures = 0;
 
 // Returns what it checked, so a test that cannot meaningfully continue past a
 // failed precondition can bail out instead of cascading. Most call sites ignore
 // it.
 inline bool Check(bool cond, const char* what) {
+    ++g_checks;
     if (cond) {
         std::printf("  ok:   %s\n", what);
         return true;
@@ -33,6 +35,7 @@ inline bool Check(bool cond, const char* what) {
 constexpr float kEpsilon = 1e-5f;
 
 inline void CheckClose(float actual, float expected, const char* what) {
+    ++g_checks;
     const bool ok = std::fabs(actual - expected) <= kEpsilon;
     if (ok) {
         std::printf("  ok:   %s\n", what);
@@ -43,12 +46,8 @@ inline void CheckClose(float actual, float expected, const char* what) {
 }
 
 inline int Summary(const char* suite) {
-    if (g_failures == 0) {
-        std::printf("\n%s: all tests passed\n", suite);
-        return 0;
-    }
-    std::printf("\n%s: %d test(s) FAILED\n", suite, g_failures);
-    return 1;
+    std::printf("\n%s: %d checks, %d failed\n", suite, g_checks, g_failures);
+    return g_failures == 0 ? 0 : 1;
 }
 
 }  // namespace wf_test

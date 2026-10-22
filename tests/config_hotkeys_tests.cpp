@@ -34,6 +34,7 @@ bool MakeTempDir() {
     const DWORD n = GetTempPathA(MAX_PATH, temp);
     if (n == 0 || n >= MAX_PATH) {
         std::printf("  FAIL: GetTempPathA failed (%lu)\n", GetLastError());
+        ++wf_test::g_checks;
         ++wf_test::g_failures;
         return false;
     }
@@ -55,6 +56,7 @@ Config Load(const char* body) {
     fopen_s(&f, IniPath().c_str(), "w");
     if (!f) {
         std::printf("  FAIL: could not write %s\n", IniPath().c_str());
+        ++wf_test::g_checks;
         ++wf_test::g_failures;
         return Config{};
     }
