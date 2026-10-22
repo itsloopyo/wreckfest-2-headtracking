@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.2] - 2026-10-22
+
+### Added
+
+- resolve camera and race state addresses at runtime
+
+### Fixed
+
+- add build profile for the 2026-10-22 Steam patch
+- refuse ambiguous discovery and disagreeing profiles
+
 ## [0.2.1] - 2026-10-16
 
 ### Fixed
